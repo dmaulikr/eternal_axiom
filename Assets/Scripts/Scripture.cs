@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using System.Linq;
+using System;
 
 public class Scripture : MonoBehaviour
 {
@@ -24,13 +25,13 @@ public class Scripture : MonoBehaviour
     /// <summary>
     /// True when the verse no longer has any blanks
     /// </summary>
-    public bool isVerseFull
+    public bool IsVerseFull
     {
         get
         {
             return UnityEditor.ArrayUtility.IndexOf(this.verse, this.blank) < 0;
         }
-    } // isVerseFull
+    } // IsVerseFull
 
     /// <summary>
     /// Holds all the individual words that make up the verse
@@ -46,6 +47,17 @@ public class Scripture : MonoBehaviour
     /// Contains the indexes that have been replaced with blanks
     /// </summary>
     List<int> indexes = new List<int>();
+
+    /// <summary>
+    /// Contains the missing word's indexes as well as the original string
+    /// Used for validating that a word adding to a given index is the original one
+    /// </summary>
+    Dictionary<int, string> correctWords = new Dictionary<int, string>() {
+        {0, "trust" },
+        {3, "lord" },
+        {7, "heart" },
+        {14, "understanding" },
+    };
 
 
     /// <summary>
@@ -86,7 +98,7 @@ public class Scripture : MonoBehaviour
         }
 
         int index = this.indexes[position];
-        this.verse[index] = "<color=#FFDE70FF>" + word + "</color>";
+        this.verse[index] = word;//"<color=#FFDE70FF>" + word + "</color>";
         this.RefreshVerseText();
     } // SetWordAtPosition
 
@@ -119,4 +131,28 @@ public class Scripture : MonoBehaviour
         this.RefreshVerseText();
     } // ResetVerse()
 
+
+    /// <summary>
+    /// Validates the next word pending validation to see if it is 
+    /// in the correct position. Correct words have their indexes removed
+    /// from the <see cref="indexes"/> list to prevent altering the word 
+    /// as well as re-validating it. Correct words are also changed to the "success" color 
+    /// </summary>
+    /// <returns></returns>
+    internal bool IsNextCorrectWord()
+    {
+        bool isCorrect = false;
+        int index = this.indexes[0];
+
+        // Case incensitive check
+        string word = this.verse[index].ToLower();
+        string correctWord = this.correctWords[index].ToLower();
+        
+        if(word == correctWord) {
+            isCorrect = true;
+            this.indexes.RemoveAt(0);
+        }
+
+        return isCorrect;
+    } // IsNextCorrectWord
 } // Class

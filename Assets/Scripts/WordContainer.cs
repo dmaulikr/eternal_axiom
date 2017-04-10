@@ -42,7 +42,7 @@ public class WordContainer : MonoBehaviour
     /// </summary>
 	void Start ()
     {
-        this.SetIndex(0);	
+        this.SetIndex("");	
 	} // Start
 	
 
@@ -51,9 +51,9 @@ public class WordContainer : MonoBehaviour
     /// This represents in which order this word was selected
     /// </summary>
     /// <param name="index"></param>
-    internal void SetIndex(int index)
+    internal void SetIndex(string index)
     {
-        this.IndexText.text = index.ToString();
+        this.IndexText.text = index;
     } // SetIndex
 
 } // Class

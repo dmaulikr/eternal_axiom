@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 
 public class BattleScene : MonoBehaviour
 {
@@ -65,6 +66,21 @@ public class BattleScene : MonoBehaviour
     } // ScriptureContainer
 
     /// <summary>
+    /// A reference to the Battle System UI GameObject
+    /// </summary>
+    GameObject battleSystemUi;
+    GameObject BattleSystemUI
+    {
+        get
+        {
+            if(this.battleSystemUi == null) {
+                this.battleSystemUi = GameObject.FindGameObjectWithTag("BattleSystemUI");
+            }
+            return this.battleSystemUi;
+        }
+    } // BattleSystemUI
+
+    /// <summary>
     /// Contains the words selected/added to the verse
     /// </summary>
     List<WordContainer> selectedWords = new List<WordContainer>();
@@ -75,28 +91,31 @@ public class BattleScene : MonoBehaviour
     /// </summary>
     void Awake()
     {
-        this.RenderWordBank(false);
+        this.WordBank.SetActive(false);
+        this.EnableBattleCamera();
     } // Awake
 
 
     /// <summary>
-    /// Toggles the Action Buttons to show based on the balue of render
+    /// Enables the Battle Camera
+    /// Disables the Attack Camera
     /// </summary>
-    /// <param name="render">True: show | Else: hide</param>
-    void RenderActionButtons(bool render = true)
+    void EnableBattleCamera()
     {
-        this.ActionButtons.SetActive(render);
-    } // RenderActionButtons
+        GameObject.FindGameObjectWithTag("BattleCamera").GetComponent<Camera>().enabled = true;
+        GameObject.FindGameObjectWithTag("AttackCamera").GetComponent<Camera>().enabled = false;
+    } // EnableBattleCamera
 
 
     /// <summary>
-    /// Toggles the Word Bank to show based on the balue of render
+    /// Enables the Attack Camera
+    /// Disables the Battle Camera
     /// </summary>
-    /// <param name="render">True: show | Else: hide</param>
-    void RenderWordBank(bool render = true)
+    void EnableAttackCamera()
     {
-        this.WordBank.SetActive(render);
-    } // RenderWordBank
+        GameObject.FindGameObjectWithTag("BattleCamera").GetComponent<Camera>().enabled = false;
+        GameObject.FindGameObjectWithTag("AttackCamera").GetComponent<Camera>().enabled = true;
+    } // EnableAttackCamera
 
 
     /// <summary>
@@ -104,8 +123,8 @@ public class BattleScene : MonoBehaviour
     /// </summary>
 	public void OnAttackButtonClick()
     {
-        this.RenderActionButtons(false);
-        this.RenderWordBank(true);
+        this.ActionButtons.SetActive(false);
+        this.WordBank.SetActive(true);
     } // OnAttackButtonClick
 
 
@@ -150,7 +169,7 @@ public class BattleScene : MonoBehaviour
         }
         
         // 0 based index hence +1 for UI to reflect the correct order
-        word.SetIndex(index + 1);
+        word.SetIndex( (index + 1).ToString() );
 
         this.Counter.DecreaseRemainingAttacks();
         this.ScriptureContainer.SetWordAtPosition(index, word.WordText.text);
@@ -171,7 +190,7 @@ public class BattleScene : MonoBehaviour
         }
 
         int index = this.selectedWords.IndexOf(word);
-        word.SetIndex(0);
+        word.SetIndex("");
 
         // Setting the index to null, allows another to occupy its place
         this.selectedWords[ this.selectedWords.IndexOf(word) ] = null;
@@ -179,20 +198,6 @@ public class BattleScene : MonoBehaviour
         this.ScriptureContainer.RemoveWordAtPosition(index);
         this.Counter.IncreaseRemainingAttacks();
     } // WordDeselected
-
-
-    /// <summary>
-    /// Called after a word is added to see if its time to launch the player attack phase
-    /// Attack phase occurs when either the player has filled all remaining blanks or has
-    /// consumed all of their remaining attacks
-    /// </summary>
-    void BeginPlayerAttackPhase()
-    {
-        if(this.ScriptureContainer.isVerseFull || this.Counter.noRemainingAttacks) {
-            this.Counter.ResetAttacks();
-            this.ClearSelectedWords();
-        }
-    } // BeginPlayerAttackPhase
 
 
     /// <summary>
@@ -207,6 +212,77 @@ public class BattleScene : MonoBehaviour
             this.WordDeselected(word);
         }
     } // ClearSelectedWords
+
+
+    /// <summary>
+    /// Called after a word is added to see if its time to launch the player attack phase
+    /// Attack phase occurs when either the player has filled all remaining blanks or has
+    /// consumed all of their remaining attacks
+    /// </summary>
+    void BeginPlayerAttackPhase()
+    {
+        if(this.ScriptureContainer.IsVerseFull || this.Counter.noRemainingAttacks) {
+            this.Counter.ResetAttacks();
+            this.BattleSystemUI.SetActive(false);
+            this.EnableAttackCamera();
+            this.ValidateAttack();
+        }
+    } // BeginPlayerAttackPhase
+
+
+    /// <summary>
+    /// Called at the beginning of each attack to see if the 
+    /// chosen word is valid and triggger an attack or stop
+    /// the attack phase when it is not
+    /// 
+    /// We use <see cref="selectedWords"/> count to determine how many words are left
+    /// for validation. Each time removing one thus preventing us from validating a "blank"
+    /// </summary>
+    void ValidateAttack()
+    {
+        // End of attack
+        if(this.selectedWords.Count < 1) {
+            this.EndAttackPhase();
+            return;
+        }
+
+        // References the word so that we reset its index and disable it when it is correct
+        WordContainer word = this.selectedWords[0];
+        word.SetIndex("");
+        this.selectedWords.RemoveAt(0);        
+
+        if(this.ScriptureContainer.IsNextCorrectWord()) {            
+            word.GetComponent<Button>().interactable = false;
+            this.ValidateAttack();
+        } else {
+            this.EndAttackPhase();
+        }
+        
+    } // ValidateAttack
+    
+
+    /// <summary>
+    /// Ends the attack phase by calculating total damage
+    /// Inflicting the damage
+    /// Resetting the camera
+    /// and Re-enabling the UI
+    /// The verse is reset but keep in mind only the remaining indexes are updated to blanks
+    /// </summary>
+    void EndAttackPhase()
+    {
+        // Reset any remaining word
+        foreach(WordContainer word in this.selectedWords) {
+            word.SetIndex("");
+        }
+
+        // Dump all selected words as to start from 0 again
+        this.selectedWords.Clear();
+        this.ScriptureContainer.ResetVerse();
+        this.EnableBattleCamera();
+        this.BattleSystemUI.SetActive(true);        
+        this.ActionButtons.SetActive(true);
+        this.WordBank.SetActive(false);
+    } // EndAttackPhase
 
 
     /// <summary>
