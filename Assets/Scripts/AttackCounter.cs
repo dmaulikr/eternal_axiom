@@ -68,7 +68,7 @@ public class AttackCounter : MonoBehaviour
     /// </summary>
     void Start ()
     {
-        this.maxAttacks = GameObject.FindGameObjectWithTag("Player").GetComponent<Player>().totalAttacks;
+        this.maxAttacks = GameObject.FindGameObjectWithTag("Player").GetComponent<PlayerBattleUnit>().totalAttacks;
         this.remainingAttacks = this.maxAttacks;        
 	} // Start
 	

@@ -53,7 +53,7 @@ public class WordContainer : MonoBehaviour
     /// <param name="index"></param>
     internal void SetIndex(string index)
     {
-        this.IndexText.text = index;
+        //this.IndexText.text = index;
     } // SetIndex
 
 } // Class

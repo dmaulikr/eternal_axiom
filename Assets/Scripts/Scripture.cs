@@ -29,7 +29,14 @@ public class Scripture : MonoBehaviour
     {
         get
         {
-            return UnityEditor.ArrayUtility.IndexOf(this.verse, this.blank) < 0;
+            bool isFull = true;
+            foreach(string word in this.verse) {
+                if(word == this.blank) {
+                    isFull = false;
+                    break;
+                }
+            }
+            return isFull;
         }
     } // IsVerseFull
 
@@ -53,10 +60,10 @@ public class Scripture : MonoBehaviour
     /// Used for validating that a word adding to a given index is the original one
     /// </summary>
     Dictionary<int, string> correctWords = new Dictionary<int, string>() {
-        {0, "trust" },
-        {3, "lord" },
-        {7, "heart" },
-        {14, "understanding" },
+        {1, "fear" },
+        {4, "lord" },
+        {10, "fools" },
+        {12, "wisdom" },
     };
 
 

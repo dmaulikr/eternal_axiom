@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class BattleScene : MonoBehaviour
@@ -81,16 +82,51 @@ public class BattleScene : MonoBehaviour
     } // BattleSystemUI
 
     /// <summary>
+    /// Holds the message screen
+    /// </summary>
+    [SerializeField]
+    GameObject MessageScreen;
+
+    /// <summary>
     /// Contains the words selected/added to the verse
     /// </summary>
     List<WordContainer> selectedWords = new List<WordContainer>();
 
+    /// <summary>
+    /// The current unit performing an action
+    /// </summary>
+    BattleUnit unit;
 
     /// <summary>
-    /// Hides the wordbank on scene laod
+    /// A reference to the player unit
+    /// </summary>
+    BattleUnit player;
+
+    /// <summary>
+    /// A reference to the enemy unit
+    /// </summary>
+    BattleUnit enemy;
+
+    /// <summary>
+    /// Keeps track of all the attacks that successfully connected
+    /// </summary>
+    int attacksConnected = 0;
+
+
+    /// <summary>
+    /// Hides the wordbank on scene load
     /// </summary>
     void Awake()
     {
+        this.MessageScreen = Instantiate(this.MessageScreen, this.transform.parent.transform, false);
+        this.MessageScreen.SetActive(false);
+
+        this.player = GameObject.FindGameObjectWithTag("Player").GetComponent<BattleUnit>();
+        this.enemy = GameObject.FindGameObjectWithTag("Enemy").GetComponent<BattleUnit>();
+
+        // Default to player
+        this.unit = this.player;
+
         this.WordBank.SetActive(false);
         this.EnableBattleCamera();
     } // Awake
@@ -104,18 +140,42 @@ public class BattleScene : MonoBehaviour
     {
         GameObject.FindGameObjectWithTag("BattleCamera").GetComponent<Camera>().enabled = true;
         GameObject.FindGameObjectWithTag("AttackCamera").GetComponent<Camera>().enabled = false;
+        GameObject.FindGameObjectWithTag("EnemyAttackCamera").GetComponent<Camera>().enabled = false;
+        GameObject.FindGameObjectWithTag("PrayerCamera").GetComponent<Camera>().enabled = false;
     } // EnableBattleCamera
+
+
+    /// <summary>
+    /// Enables the prayer camera
+    /// </summary>
+    void EnablePrayerCamera()
+    {
+        GameObject.FindGameObjectWithTag("BattleCamera").GetComponent<Camera>().enabled = false;
+        GameObject.FindGameObjectWithTag("PrayerCamera").GetComponent<Camera>().enabled = true;
+    } // EnablePrayerCamera
 
 
     /// <summary>
     /// Enables the Attack Camera
     /// Disables the Battle Camera
     /// </summary>
-    void EnableAttackCamera()
+    void EnablePlayerAttackCamera()
     {
         GameObject.FindGameObjectWithTag("BattleCamera").GetComponent<Camera>().enabled = false;
         GameObject.FindGameObjectWithTag("AttackCamera").GetComponent<Camera>().enabled = true;
-    } // EnableAttackCamera
+        GameObject.FindGameObjectWithTag("EnemyAttackCamera").GetComponent<Camera>().enabled = false;
+    } // EnablePlayerAttackCamera
+
+
+    /// Enables the Battle Camera
+    /// Disables the Attack Camera
+    /// </summary>
+    void EnableEnemyAttackCamera()
+    {
+        GameObject.FindGameObjectWithTag("BattleCamera").GetComponent<Camera>().enabled = false;
+        GameObject.FindGameObjectWithTag("AttackCamera").GetComponent<Camera>().enabled = false;
+        GameObject.FindGameObjectWithTag("EnemyAttackCamera").GetComponent<Camera>().enabled = true;
+    } // EnablePlayerBattleCamera
 
 
     /// <summary>
@@ -170,11 +230,12 @@ public class BattleScene : MonoBehaviour
         
         // 0 based index hence +1 for UI to reflect the correct order
         word.SetIndex( (index + 1).ToString() );
+        word.GetComponent<Button>().image.color = new Color(1, 0.92f, 0.016f, 1);
 
         this.Counter.DecreaseRemainingAttacks();
         this.ScriptureContainer.SetWordAtPosition(index, word.WordText.text);
 
-        this.BeginPlayerAttackPhase();
+        this.BeginUnitAttackPhase();
     } // WordSelected
 
 
@@ -197,6 +258,8 @@ public class BattleScene : MonoBehaviour
 
         this.ScriptureContainer.RemoveWordAtPosition(index);
         this.Counter.IncreaseRemainingAttacks();
+
+        word.GetComponent<Button>().image.color = new Color(1, 1, 1, 1);
     } // WordDeselected
 
 
@@ -215,19 +278,37 @@ public class BattleScene : MonoBehaviour
 
 
     /// <summary>
+    /// Triggers the player to heal
+    /// </summary>
+    public void Pray()
+    {
+        this.BattleSystemUI.SetActive(false);
+        this.EnablePrayerCamera();
+        this.player.TriggerHealing();
+    } // Pray
+
+
+    /// <summary>
     /// Called after a word is added to see if its time to launch the player attack phase
     /// Attack phase occurs when either the player has filled all remaining blanks or has
     /// consumed all of their remaining attacks
     /// </summary>
-    void BeginPlayerAttackPhase()
+    public void BeginUnitAttackPhase(bool force = false)
     {
-        if(this.ScriptureContainer.IsVerseFull || this.Counter.noRemainingAttacks) {
+        // No words selected
+        if(force && this.Counter.Current == this.Counter.Max) {
+            return;
+        }
+
+        // Switch back to player
+        this.unit = this.player;
+
+        if(force || this.ScriptureContainer.IsVerseFull || this.Counter.noRemainingAttacks) {
             this.Counter.ResetAttacks();
             this.BattleSystemUI.SetActive(false);
-            this.EnableAttackCamera();
-            this.ValidateAttack();
+            this.ValidatePlayerAttack();
         }
-    } // BeginPlayerAttackPhase
+    } // BeginUnitAttackPhase
 
 
     /// <summary>
@@ -238,10 +319,10 @@ public class BattleScene : MonoBehaviour
     /// We use <see cref="selectedWords"/> count to determine how many words are left
     /// for validation. Each time removing one thus preventing us from validating a "blank"
     /// </summary>
-    void ValidateAttack()
+    void ValidatePlayerAttack()
     {
         // End of attack
-        if(this.selectedWords.Count < 1) {
+        if(this.selectedWords.Count < 1 || this.unit == this.enemy) {
             this.EndAttackPhase();
             return;
         }
@@ -251,14 +332,53 @@ public class BattleScene : MonoBehaviour
         word.SetIndex("");
         this.selectedWords.RemoveAt(0);        
 
-        if(this.ScriptureContainer.IsNextCorrectWord()) {            
+        if(this.ScriptureContainer.IsNextCorrectWord()) {
+            this.attacksConnected++;
             word.GetComponent<Button>().interactable = false;
-            this.ValidateAttack();
+            this.EnablePlayerAttackCamera();
+            this.unit.Attack(this.enemy);
         } else {
-            this.EndAttackPhase();
+            // Before triggering the enemy attack, the player may have caused damage
+            if(this.attacksConnected > 0) {
+                this.unit.EndAttack();
+                this.unit.InflictDamage(this.attacksConnected);
+            }
+
+            this.EnemyAttack();
+            this.EnableEnemyAttackCamera();
         }
         
-    } // ValidateAttack
+    } // ValidatePlayerAttack
+
+
+    /// <summary>
+    /// Enemy attacks the player
+    /// </summary>
+    void EnemyAttack()
+    {
+        this.attacksConnected = 1;
+        this.unit = this.enemy;
+        this.unit.Attack(this.player);
+    } // EnemyAttack
+
+
+    /// <summary>
+    /// Returns the target for the current unit
+    /// </summary>
+    /// <param name="currentUnit">The current unit performing an action</param>
+    /// <returns></returns>
+    BattleUnit GetTargetUnit(BattleUnit currentUnit)
+    {
+        BattleUnit target;
+
+        if(currentUnit == this.player) {
+            target = this.enemy;
+        } else {
+            target = this.player;
+        }
+
+        return target;
+    } // GetTargetUnit
     
 
     /// <summary>
@@ -275,10 +395,29 @@ public class BattleScene : MonoBehaviour
             word.SetIndex("");
         }
 
+        // Resets unit's attack and returns to idle animation
+        this.unit.EndAttack();
+
+        // Apply the total damage 
+        this.unit.InflictDamage(this.attacksConnected);
+        this.attacksConnected = 0;
+
+        // Reset selecte words color unless they are disabled
         // Dump all selected words as to start from 0 again
+        foreach(WordContainer word in this.selectedWords) {
+            if(word.GetComponent<Button>().interactable) {
+                word.GetComponent<Button>().image.color = new Color(1, 1, 1, 1);
+            }
+        }
         this.selectedWords.Clear();
         this.ScriptureContainer.ResetVerse();
         this.EnableBattleCamera();
+
+        // Stop here if either one is dead
+        if(this.player.IsDead() || this.enemy.IsDead() ) {
+            return;
+        }
+
         this.BattleSystemUI.SetActive(true);        
         this.ActionButtons.SetActive(true);
         this.WordBank.SetActive(false);
@@ -286,13 +425,50 @@ public class BattleScene : MonoBehaviour
 
 
     /// <summary>
+    /// Re-enables the UI post player healing
+    /// </summary>
+    public void EndPrayPhase()
+    {
+        this.EnableBattleCamera();
+        this.BattleSystemUI.SetActive(true);        
+        this.ActionButtons.SetActive(true);
+        this.WordBank.SetActive(false);
+    } // EndPrayPhase
+
+
+    /// <summary>
     /// Called by the player avatar when the attack animation is done
     /// If there are additional attacks, it triggers another attack
     /// Otherwise, resets attacks and sets animation back to idle
     /// </summary>
-    public void PlayerAttackAnimationEnd()
+    public void AttackAnimationEnd(BattleUnit unit)
     {
+        this.ValidatePlayerAttack();
+    } // AttackAnimationEnd
 
-    } // PlayerAttackAnimationEnd
+    /// <summary>
+    /// Called when a unit has died to determine game over or game won
+    /// </summary>
+    /// <param name="unit"></param>
+    internal void UnitDied(BattleUnit unit)
+    {
+        string message = "";
 
+        if(unit == this.player) {
+            message = "You've succumbed to sin...";
+        } else {
+            message = "You've victory over sin!";
+        }
+
+        this.MessageScreen.SetActive(true);
+        this.MessageScreen.transform.FindChild("Message").GetComponent<Text>().text = message;
+    } // UnitDied
+
+    /// <summary>
+    /// Reloads the level
+    /// </summary>
+    public void Reload()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
 } // class
