@@ -116,7 +116,7 @@ public class BattleScene : MonoBehaviour
     /// <summary>
     /// Hides the wordbank on scene load
     /// </summary>
-    void Awake()
+    public void Init()
     {
         this.MessageScreen = Instantiate(this.MessageScreen, this.transform.parent.transform, false);
         this.MessageScreen.SetActive(false);
@@ -129,7 +129,7 @@ public class BattleScene : MonoBehaviour
 
         this.WordBank.SetActive(false);
         this.EnableBattleCamera();
-    } // Awake
+    } // Init
 
 
     /// <summary>
