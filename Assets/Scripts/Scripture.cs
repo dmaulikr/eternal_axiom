@@ -5,6 +5,9 @@ using UnityEngine.UI;
 using System.Linq;
 using System;
 
+/// <summary>
+/// Handles interaction with the verse and the bible reference
+/// </summary>
 public class Scripture : MonoBehaviour
 {
     /// <summary>
@@ -82,7 +85,6 @@ public class Scripture : MonoBehaviour
         }
     } // Start
 
-
     /// <summary>
     /// Updates the verse text to reflect what it is currently in the <see cref="verse"/> array
     /// </summary>
@@ -90,7 +92,6 @@ public class Scripture : MonoBehaviour
     {
         this.VerseText.text = string.Join(" ", this.verse);
     } // RefreshVerseText
-
 
     /// <summary>
     /// Updates the verse with the given word
@@ -109,7 +110,6 @@ public class Scripture : MonoBehaviour
         this.RefreshVerseText();
     } // SetWordAtPosition
 
-
     /// <summary>
     /// Updates the word at the given position to be a blank
     /// </summary>
@@ -125,7 +125,6 @@ public class Scripture : MonoBehaviour
         this.RefreshVerseText();
     } // RemoveWordAtPosition
 
-
     /// <summary>
     /// Re-adds all blanks back to the verse
     /// </summary>
@@ -136,8 +135,7 @@ public class Scripture : MonoBehaviour
         }
 
         this.RefreshVerseText();
-    } // ResetVerse()
-
+    } // ResetVerse
 
     /// <summary>
     /// Validates the next word pending validation to see if it is 

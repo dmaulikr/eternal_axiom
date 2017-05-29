@@ -70,13 +70,13 @@ public class BattleUnit : MonoBehaviour
     /// <summary>
     /// A reference to the scene controller
     /// </summary>
-    BattleScene sceneController;
-    BattleScene SceneController
+    BattleController sceneController;
+    BattleController SceneController
     {
         get
         {
             if(this.sceneController == null) {
-                this.sceneController = FindObjectOfType<BattleScene>();
+                this.sceneController = FindObjectOfType<BattleController>();
             }
             return this.sceneController;
         }

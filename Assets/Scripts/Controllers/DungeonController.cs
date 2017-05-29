@@ -3,24 +3,19 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+
 /// <summary>
 /// Handles the loading and configurations of the current Dungeon
 /// Enables/Disables the player control UI
 /// Transitions in/out of battles
 /// </summary>
-public class DungeonController : MonoBehaviour
+public class DungeonController : BaseController
 {
-    /// <summary>
-    /// The canvas containing the player controls available while exploring the dungeon
-    /// </summary>
-    [SerializeField]
-    GameObject DungeonCanvasGO;
-
     /// <summary>
     /// A reference to the player game object
     /// </summary>
     GameObject PlayerGO;
-
+    
 
     /// <summary>
     /// Forces the screen to be black while assests are loaded
@@ -29,20 +24,10 @@ public class DungeonController : MonoBehaviour
     /// </summary>
 	void Awake()
     {
-        int level = GameManager.Instance.level;
-
-        if (this.DungeonCanvasGO == null) {
-            throw new System.Exception("DungeonCanvas GameObject not provided");
-        }
-
-        // Save the reference to the newly spawned instance and ensure it is active
-        this.DungeonCanvasGO = Instantiate(this.DungeonCanvasGO);
-        this.DungeonCanvasGO.name = "DungeonCanvas";
-        this.DungeonCanvasGO.SetActive(true);
-
+        int level = GameManager.Instance.level;        
+        UIController.Instance.SetUIStatus(UIDetails.Name.Dungeon, true);
         this.PlayerGO = GameObject.FindGameObjectWithTag("Player");
     } // Awake
-
 
     /// <summary>
     /// Triggered on enemy-player collision
@@ -52,6 +37,26 @@ public class DungeonController : MonoBehaviour
     public void BattleEncounter(GameObject enemyBattlePrefab)
     {
         this.PlayerGO.GetComponent<PlayerDungeon>().enabled = false;
-        this.DungeonCanvasGO.SetActive(false);
+        CameraController.Instance.SwitchToCamera(CameraDetails.Name.Battle);
+        UIController.Instance.SwitchToUI(UIDetails.Name.MainBattle);
+        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, true);
     } // BattleEncounter
-}
+
+    /// <summary>
+    /// Processes the action for the button pressed
+    /// </summary>
+    /// <param name="button"></param>
+    public override void OnButtonPressed(UIButton button)
+    {
+        Debug.Log(name + " on Pressed for " + button);
+    } // OnButtonPressed
+
+    /// <summary>
+    /// Processes the action for the button released
+    /// </summary>
+    /// <param name="button"></param>
+    public override void OnButtonReleased(UIButton button)
+    {
+        Debug.Log(name + " on release for " + button);
+    } // OnButtonReleased
+} // class

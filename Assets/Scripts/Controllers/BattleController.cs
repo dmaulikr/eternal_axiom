@@ -4,7 +4,10 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class BattleScene : MonoBehaviour
+/// <summary>
+/// Controls the actions and player interface during a battle sequence
+/// </summary>
+public class BattleController : BaseController
 {
     /// <summary>
     /// A reference to the word bank and remaining attack UI container
@@ -471,4 +474,22 @@ public class BattleScene : MonoBehaviour
     {
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
+
+    /// <summary>
+    /// Processes the action for the button pressed
+    /// </summary>
+    /// <param name="button"></param>
+    public override void OnButtonPressed(UIButton button)
+    {
+        Debug.Log(name + " on Pressed for " + button);
+    } // OnButtonPressed
+
+    /// <summary>
+    /// Processes the action for the button released
+    /// </summary>
+    /// <param name="button"></param>
+    public override void OnButtonReleased(UIButton button)
+    {
+        Debug.Log(name + " on release for " + button);
+    } // OnButtonReleased
 } // class
