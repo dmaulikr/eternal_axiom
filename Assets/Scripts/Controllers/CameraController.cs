@@ -4,7 +4,7 @@ using UnityEngine;
 /// <summary>
 /// Handles interactions with cameras
 /// </summary>
-public class CameraController
+public class CameraController : MonoBehaviour
 {
 	/// <summary>
     /// The resource locations of all the cameras available to the dungeon
@@ -19,35 +19,47 @@ public class CameraController
     Camera visibleCamera;
 
     /// <summary>
+    /// Contains a list of all the UIGOs this controller manages
+    /// </summary>
+    [SerializeField]
+    List<GameObject> allCamerasGO;
+
+    /// <summary>
     /// Contains all cameras available to the dungeon along with a descriptive name
     /// </summary>
     Dictionary<CameraDetails.Name, Camera> Cameras = new Dictionary<CameraDetails.Name, Camera>();
 
-    /// <summary>
-    /// Single instance of this class
+     /// <summary>
+    /// Instance of the GameManager
     /// </summary>
-    private static CameraController instance;
+    static CameraController instance;
 
     /// <summary>
-    /// Prevents instantiation of the class without using the getter
-    /// </summary>
-    private CameraController() { }
-
-    /// <summary>
-    /// Returns a constants instances of the CameraController class
-    /// with all of the cameras loaded with only the main camera enabled
+    /// Active GameManager instance
     /// </summary>
     public static CameraController Instance
     {
         get
         {
-            if(instance == null) {
-                instance = new CameraController();
+            if(instance==null) {
+                instance = FindObjectOfType<CameraController>();
                 instance.LoadCameras();
             }
             return instance;
         }
     } // Instance
+
+    /// <summary>
+    /// Prevents the GameManger from having more that one instance
+    /// Prevent the GameManager from being destroy on scene load
+    /// </summary>
+    void Awake()
+    {
+        if(instance == null) {
+            instance = this;
+            instance.LoadCameras();
+        }
+    } // Awake
 
     /// <summary>
     /// Loads all cameras resources available to the dungeon
@@ -58,20 +70,20 @@ public class CameraController
         // Always starts with the current "main" camera
         this.visibleCamera = Camera.main;
 
-        if(string.IsNullOrEmpty(this.pathToCameras)) {
-            throw new System.Exception("Missing path to dungeon cameras");
-        }
+        //if(string.IsNullOrEmpty(this.pathToCameras)) {
+        //    throw new System.Exception("Missing path to dungeon cameras");
+        //}
 
-        GameObject[] allCameras = Utility.LoadResources<GameObject>(this.pathToCameras);
-        if(allCameras.GetLength(0) < 1) {
-            throw new System.Exception(string.Format("No cameras found under path [{0}]", this.pathToCameras));
-        }
+        //GameObject[] allCameras = Utility.LoadResources<GameObject>(this.pathToCameras);
+        //if(allCameras.GetLength(0) < 1) {
+        //    throw new System.Exception(string.Format("No cameras found under path [{0}]", this.pathToCameras));
+        //}
 
         // Store the current one too
         CameraDetails.Name cameraName = this.visibleCamera.GetComponentInParent<CameraDetails>().cameraName;
         this.Cameras[cameraName] = this.visibleCamera;
 
-        foreach(GameObject cameraGO in allCameras) {
+        foreach(GameObject cameraGO in this.allCamerasGO) {
             cameraName = cameraGO.GetComponent<CameraDetails>().cameraName;
 
             // Avoid duplicates

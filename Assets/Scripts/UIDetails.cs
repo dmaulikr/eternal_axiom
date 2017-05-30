@@ -14,6 +14,7 @@ public class UIDetails : MonoBehaviour
         MainBattle,
         PlayerTurn,
         PlayerAttack,
+        BattleMessage,
     }
 
     /// <summary>

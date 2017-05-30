@@ -5,7 +5,7 @@ using UnityEngine;
 /// <summary>
 /// Handles all interactions with the creation/changing of UIs
 /// </summary>
-public class UIController
+public class UIController : MonoBehaviour
 { 
     /// <summary>
     /// The canvas containing all the UserInterfaces
@@ -26,35 +26,49 @@ public class UIController
     GameObject visibleUI;
 
     /// <summary>
+    /// Contains a list of all the UIGOs this controller manages
+    /// </summary>
+    [SerializeField]
+    List<GameObject> allUIdsGO;
+
+    /// <summary>
     /// Contains all UIs availabe to the player
     /// </summary>
     Dictionary<UIDetails.Name, GameObject> UserInterfaces = new Dictionary<UIDetails.Name, GameObject>();
 
     /// <summary>
-    /// Single instance of this class
+    /// Instance of the GameManager
     /// </summary>
-    private static UIController instance;
+    static UIController instance;
 
     /// <summary>
-    /// Prevents instantiation of the class without using the getter
-    /// </summary>
-    private UIController() { }
-
-    /// <summary>
-    /// Returns a constants instances of the UIController class
-    /// with all of the UIs loaded
+    /// Active GameManager instance
     /// </summary>
     public static UIController Instance
     {
         get
         {
-            if(instance == null) {
-                instance = new UIController();
+            if(instance==null) {
+                //GameObject gmObject = new GameObject("_UIController", typeof(UIController));
+                //instance = gmObject.GetComponent<UIController>();
+                instance = FindObjectOfType<UIController>();
                 instance.LoadUIs();
             }
             return instance;
         }
     } // Instance
+
+    /// <summary>
+    /// Prevents the GameManger from having more that one instance
+    /// Prevent the GameManager from being destroy on scene load
+    /// </summary>
+    void Awake()
+    {
+        if(instance == null) {
+            instance = this;
+            instance.LoadUIs();
+        }
+    } // Awake
 
     /// <summary>
     /// Loads all UserInterfaces objects under the MainCanvas
@@ -68,16 +82,16 @@ public class UIController
             throw new System.Exception("No Canvas found to add UserInterfaces");
         }
 
-        if(string.IsNullOrEmpty(this.pathToUIs)) {
-            throw new System.Exception("Missing path to UserInterfaces");
-        }
+        //if(string.IsNullOrEmpty(this.pathToUIs)) {
+        //    throw new System.Exception("Missing path to UserInterfaces");
+        //}
 
-        GameObject[] allUIs = Utility.LoadResources<GameObject>(this.pathToUIs);
-        if(allUIs.GetLength(0) < 1) {
-            throw new System.Exception(string.Format("No user interfaces found under path [{0}]", this.pathToUIs));
-        }
+        //GameObject[] allUIs = Utility.LoadResources<GameObject>(this.pathToUIs);
+        //if(allUIs.GetLength(0) < 1) {
+        //    throw new System.Exception(string.Format("No user interfaces found under path [{0}]", this.pathToUIs));
+        //}
 
-        foreach(GameObject uiGO in allUIs) {
+        foreach(GameObject uiGO in this.allUIdsGO) {
             UIDetails.Name uiName = uiGO.GetComponent<UIDetails>().uiName;
 
             // Avoid duplicates
@@ -127,4 +141,53 @@ public class UIController
 
         this.UserInterfaces[uiName].SetActive(isActive);
     } // SetUIStatus
+
+    /// <summary>
+    /// Adds a new UserInterface to collection if it does not exists
+    /// Can be set as current which will turn off the previous current
+    /// </summary>
+    /// <param name="uiName">Name of the UI</param>
+    /// <param name="setAsCurrent">True: replaces current with this one. Defaults to False</param>
+    /// <param name="isActive">True: enables the UI. Defaults to False</param>
+    public void AddUI(UIDetails.Name uiName, GameObject uiGO, bool setAsCurrent = false, bool isActive = false)
+    {
+        // Avoids duplicate
+        if( ! this.UserInterfaces.ContainsKey(uiName)) {
+            this.UserInterfaces[uiName] = GameObject.Instantiate(uiGO, this.MainCanvas.transform, false);
+            this.UserInterfaces[uiName].name = uiGO.name;
+        }
+
+        if(setAsCurrent) {
+            this.SwitchToUI(uiName);
+        }
+
+        this.SetUIStatus(uiName, isActive);
+    } // AddUI
+
+    /// <summary>
+    /// Returns the UserInterface parent game object
+    /// This is not the canvas but rather the ui parent gameobject container
+    /// </summary>
+    /// <param name="uiName"></param>
+    /// <returns></returns>
+    public GameObject GetUIGameObject(UIDetails.Name uiName)
+    {
+        GameObject uiGO = null;
+
+        if(this.UserInterfaces.ContainsKey(uiName)) {
+            uiGO = this.UserInterfaces[uiName];
+        }
+
+        return uiGO;
+    } // GetUIGameObject
+
+    /// <summary>
+    ///  Disables all UIs including current visible one
+    /// </summary>
+    public void DisableAll()
+    {
+        foreach(KeyValuePair<UIDetails.Name, GameObject> uiEntry in this.UserInterfaces) {
+            uiEntry.Value.SetActive(false);
+        }
+    } // DisableAll
 } // class

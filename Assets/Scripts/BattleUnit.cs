@@ -48,6 +48,11 @@ public class BattleUnit : MonoBehaviour
     bool isHealing = false;
 
     /// <summary>
+    /// True when the unit is defending which halves the attack received
+    /// </summary>
+    bool isDefending = false;
+
+    /// <summary>
     /// Current target being attacked
     /// </summary>
     internal BattleUnit target;
@@ -139,6 +144,7 @@ public class BattleUnit : MonoBehaviour
         // Animation must be played manually as they do not loop
         // and the mechanim stays on the last frame after the previous animation ends
         this.AnimatorController.Play("Attack", -1, 0f);
+        this.AnimatorController.SetTrigger("Attack");
     } // Attack
 
 
@@ -168,7 +174,7 @@ public class BattleUnit : MonoBehaviour
         if(this.target == null) {
             return;
         }
-        this.target.AnimatorController.SetTrigger("Damaged");
+        this.target.AnimatorController.SetTrigger("Hurt");
     } // AttackConnected
 
 
@@ -187,8 +193,13 @@ public class BattleUnit : MonoBehaviour
     /// </summary>
     public void HealUnit()
     {
-        int healing = this.attackPower / 2;
+        // Turn on defend
+        this.isDefending = true;
+
+        // 30% Healing from max health
+        int healing = Mathf.RoundToInt(this.maxHealth * 0.30f);
         this.health = Mathf.Min(this.health + healing, this.maxHealth);
+
         this.AnimatorController.SetFloat("Health", this.health);
         this.SpawnPopupPrefab(this.textPopup, healing.ToString());
         this.SceneController.EndPrayPhase();
@@ -203,6 +214,13 @@ public class BattleUnit : MonoBehaviour
     /// <param name="damage"></param>
     internal void TakeDamage(int damage)
     {
+        // Cut damage in half if the unit is defending
+        // Defending last for a single attack
+        if(this.isDefending) {
+            this.isDefending = false;
+            damage = Mathf.RoundToInt(damage * 0.5f);
+        }
+
         this.health = Mathf.Max(0, this.health - damage);
         this.SpawnPopupPrefab(this.textPopup, damage.ToString());
         this.HealthText.text = this.health.ToString() + " / " + this.maxHealth.ToString();
@@ -258,12 +276,6 @@ public class BattleUnit : MonoBehaviour
 
             TextPopUp popup = popupText.GetComponent<TextPopUp>();
             popup.setValue(text);
-
-            //// However, the text is still not positioned correctly 
-            //// We need to transform the position correctly
-            //Vector2 screenPos = Camera.main.WorldToScreenPoint(startPos);
-
-            //popupText.transform.position = screenPos;
         } // if
 
     } // SpawnPopupPrefab

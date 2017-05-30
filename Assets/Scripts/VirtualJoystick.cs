@@ -29,6 +29,10 @@ public class VirtualJoystick : MonoBehaviour, IDragHandler, IPointerDownHandler,
         {
             return this.inputVector;
         }
+        set
+        {
+            this.inputVector = value;
+        }
     }
 
     void Start()

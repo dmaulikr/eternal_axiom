@@ -37,7 +37,7 @@ public class PlayerDungeon : MonoBehaviour
         }
     }
 
-        Rigidbody rgdbody;
+    Rigidbody rgdbody;
     /// <summary>
     /// Returns the rigid body component
     /// </summary>
@@ -86,14 +86,36 @@ public class PlayerDungeon : MonoBehaviour
     [SerializeField]
     Vector3 MovementVector = new Vector3();
 
+    /// <summary>
+    /// Remains True while the player attack animation is playing
+    /// </summary>
+    public bool isAttacking = false;
 
+    /// <summary>
+    /// True when the attack animation is still within "hit frames"
+    /// </summary>
+    public bool attackFramesActive = false;
+
+    /// <summary>
+    /// True when the player has been hurt
+    /// </summary>
+    bool isHurt = false;
+
+    /// <summary>
+    /// When True causes the joystick to reset and all movement to stop
+    /// Note: the animations (attack or hurt) will continue to play
+    /// </summary>
+    bool enemyEncountered = false;
+    
     /// <summary>
     /// Gets player's movement and translates them into rotation and movement
     /// </summary>
     void Update()
     {
         // Joystick may not loaded. If so, stop execution
-        if(this.Joystick == null) {
+        if(this.Joystick == null || this.isAttacking || this.isHurt || this.enemyEncountered) {
+            // Stop moving
+            this.Rigidbody.velocity = Vector3.zero; 
             return;
         }
 
@@ -106,6 +128,41 @@ public class PlayerDungeon : MonoBehaviour
         this.Move(this.MovementVector);
     } // Update
 
+    /// <summary>
+    /// Triggers the attack animation
+    /// Turns on the attacking flag to prevent movement while animation plays
+    /// </summary>
+    public void Attack()
+    {
+        // Can't attack while hurt
+        if(this.isHurt) {
+            return;
+        }
+
+        this.isAttacking = true;
+        this.Animator.SetTrigger("Attack");
+    } // Attack
+
+    /// <summary>
+    /// Stops movement and resets joystick to avoid continual movement
+    /// </summary>
+    public void EnemyEncountered()
+    {
+        this.attackFramesActive = false;
+        this.enemyEncountered = true;
+        this.Joystick.InputVector = Vector3.zero;
+        this.Animator.SetFloat("MovingSpeed", 0f);
+    } // EnemyEncountered
+
+    /// <summary>
+    /// Triggers the hurt animation
+    /// Turns on the isHurt flag to avoid control during this time
+    /// </summary>
+    public void TriggerHurt()
+    {
+        this.isHurt = true;
+        this.Animator.SetTrigger("Hurt");
+    } // TriggerHurt
 
     /// <summary>
     /// Returns a movement vector based on the player's input
@@ -140,7 +197,7 @@ public class PlayerDungeon : MonoBehaviour
     void Move(Vector3 movementInput)
     {
         // Prevents the unit from continuos movement
-        this.Rigidbody.velocity = Vector3.zero;       
+        this.Rigidbody.velocity = Vector3.zero;
 
         // Save the force
         Vector3 moveForce = this.WorldToScreenCoordinates(
@@ -207,4 +264,33 @@ public class PlayerDungeon : MonoBehaviour
         return screenCoords;
     } // WorldToScreenCoordinates
 
+    /// <summary>
+    /// Triggered when the attack animation is within the hit frames
+    /// </summary>
+    public void HitFramesStart()
+    {
+        this.attackFramesActive = true;
+    } // AttackConnects
+
+    /// <summary>
+    /// Triggered when the attack animation is no longer within the hit frames
+    /// </summary>
+    public void HitFramesEnd()
+    {
+        this.attackFramesActive = false;
+    } // HitFramesEnd
+
+    /// <summary>
+    /// Triggered by an animation event during the last few frames of the animation
+    /// </summary>
+    public void AnimationEnd()
+    {
+        if(this.isAttacking) {
+            this.isAttacking = false;
+        }
+
+        if(this.isHurt) {
+            this.isHurt = false;
+        }
+    } // AnimationEnd
 } // class
