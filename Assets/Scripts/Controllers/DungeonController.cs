@@ -38,6 +38,11 @@ public class DungeonController : BaseController
     /// A reference to the battle controller
     /// </summary>
     BattleController battleController;
+
+    /// <summary>
+    /// Prevents the coroutine from triggering multiple battle starts
+    /// </summary>
+    bool isBattleStarted = false;
     
 
     /// <summary>
@@ -88,22 +93,20 @@ public class DungeonController : BaseController
         this.encounteredEnemy = enemy;
         this.Player.EnemyEncountered();
         // Call is delayed to allow animations to play for a bit before transitioning
-        Invoke("StartBattle", 0.5f);
+        if(!this.isBattleStarted) {
+            this.isBattleStarted = true;
+            StartCoroutine(StartBattle(enemy.battlePrefab, type));
+        }        
     } // BattleEncounter
 
     /// <summary>
     /// Triggers the battle sequence
     /// </summary>
-    void StartBattle()
+    IEnumerator StartBattle(GameObject enemyPrefab, BaseDungeonEnemy.EncounterType encounterType)
     {
+        yield return new WaitForSeconds(.5f);
         this.Player.enabled = false;
-
-        // Update the view
-        CameraController.Instance.SwitchToCamera(CameraDetails.Name.Battle);
-        UIController.Instance.SwitchToUI(UIDetails.Name.MainBattle);
-        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, true);
-
-        this.battleController.Init();
+        this.battleController.Init(enemyPrefab, encounterType);
     } // StartBattle
 
     /// <summary>
@@ -111,9 +114,11 @@ public class DungeonController : BaseController
     /// </summary>
     public void BattleEnd()
     {
+        this.isBattleStarted = false;
         CameraController.Instance.SwitchToCamera(CameraDetails.Name.Main);
-        this.encounteredEnemy.Defeated();
+        this.encounteredEnemy.Defeated();        
         this.Player.enabled = true;
+        this.Player.BattleSequenceCompleted();
         UIController.Instance.SwitchToUI(UIDetails.Name.Dungeon);
     } // BattleEnd
 
@@ -122,7 +127,9 @@ public class DungeonController : BaseController
     /// </summary>
     public void ResetDungeon()
     {
+        this.isBattleStarted = false;
         this.Player.enabled = true;
+        this.Player.BattleSequenceCompleted();
         CameraController.Instance.SwitchToCamera(CameraDetails.Name.Main);
         UIController.Instance.SwitchToUI(UIDetails.Name.Dungeon);
     } // ResetDungeon

@@ -115,6 +115,8 @@ public class BattleUnit : MonoBehaviour
     /// </summary>
     void Start()
     {
+        this.isAttacking = false;
+        this.isDefending = false;
         this.HealthText.text = this.health.ToString() + " / " + this.maxHealth.ToString();
         this.AnimatorController.SetFloat("Health", this.health);
     } // Start
@@ -152,11 +154,12 @@ public class BattleUnit : MonoBehaviour
     /// Triggers the target to receive damage based on the multiplier given
     /// </summary>
     /// <param name="multiplier">how much to multiply the unit's attack power by</param>
-    public void InflictDamage(int multiplier = 1)
+    public void InflictDamage(int multiplier = 0)
     {
         if(this.target == null) {
             return;
         }
+
         multiplier = Mathf.Abs(multiplier);
         int damage = this.attackPower * multiplier;
         this.target.TakeDamage(damage);

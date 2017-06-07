@@ -68,8 +68,7 @@ public class AttackCounter : MonoBehaviour
     /// </summary>
     void Start ()
     {
-        this.maxAttacks = GameObject.FindGameObjectWithTag("BattlePlayer").GetComponent<PlayerBattleUnit>().totalAttacks;
-        this.remainingAttacks = this.maxAttacks;        
+        
 	} // Start
 	
 	/// <summary>
@@ -77,6 +76,15 @@ public class AttackCounter : MonoBehaviour
     /// </summary>
 	void Update ()
     {
+        if (this.maxAttacks == 0) {
+
+            GameObject player = GameObject.FindGameObjectWithTag("BattlePlayer");
+            if(player != null) {
+                this.maxAttacks = GameObject.FindGameObjectWithTag("BattlePlayer").GetComponent<PlayerBattleUnit>().totalAttacks;
+                this.remainingAttacks = this.maxAttacks;
+            }
+        }
+
 		this.RemainingText.text = this.textPrefix + this.remainingAttacks.ToString();
 	} // Update
 

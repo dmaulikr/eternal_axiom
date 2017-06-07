@@ -111,6 +111,12 @@ public class BattleController : BaseController
     BattleUnit player;
 
     /// <summary>
+    /// Contains a reference to the player gameobject prefab
+    /// </summary>
+    [SerializeField]
+    GameObject playerPrefab;
+
+    /// <summary>
     /// A reference to the enemy unit
     /// </summary>
     BattleUnit enemy;
@@ -119,6 +125,23 @@ public class BattleController : BaseController
     /// Keeps track of all the attacks that successfully connected
     /// </summary>
     int attacksConnected = 0;
+
+    /// <summary>
+    /// Forces a turn skip for the enemy when False
+    /// </summary>
+    bool enemyCanAttack = true;
+
+    /// <summary>
+    /// Location to spawn the player on battle sequence init
+    /// </summary>
+    [SerializeField]
+    Transform playerSpawnPoint;
+
+    /// <summary>
+    /// Location to spawn the enemy on battle sequence init
+    /// </summary>
+    [SerializeField]
+    Transform enemySpawnPoint;
 
     /// <summary>
     /// Holds a refernece to the dungeon controller
@@ -137,31 +160,163 @@ public class BattleController : BaseController
 
 
     /// <summary>
-    /// Hides the wordbank on scene load
+    /// Initializes the battle sequence 
+    /// Spawns the player and enemy(ies)
+    /// Sets the camera and UI
+    /// Decideds the starting unit based on the encounter type
     /// </summary>
-    public void Init()
+    /// <param name="enemyPrefab">Enemy encountered</param>
+    /// <param name="encounterType">Type of encounter</param>
+    public void Init(GameObject enemyPrefab, BaseDungeonEnemy.EncounterType encounterType)
     {
+        UIController.Instance.DisableAll();
+
+        // Holds the message to display victory or death
         if(this.MessageScreen == null) {
-
-            //if(string.IsNullOrEmpty(this.pathToMessageScreen)) {
-            //    throw new System.Exception("Path to message screen is null or empty");
-            //}
-
-            //// Creates the message screen that holds results of the battle
-            //GameObject messageScreenGO = Utility.LoadResource<GameObject>(this.pathToMessageScreen);
-            //if(messageScreenGO == null) {
-            //    throw new System.Exception(string.Format("Could not find the message screen prefab in {0}", this.pathToMessageScreen));
-            //}
-            //UIController.Instance.AddUI(UIDetails.Name.BattleMessage, messageScreenGO);
             this.MessageScreen = UIController.Instance.GetUIGameObject(UIDetails.Name.BattleMessage);
         }
 
-        this.player = GameObject.FindGameObjectWithTag("BattlePlayer").GetComponent<BattleUnit>();
-        this.enemy = GameObject.FindGameObjectWithTag("BattleEnemy").GetComponent<BattleUnit>();
+        GameObject playerGO = Instantiate(this.playerPrefab, this.transform, false);
+        playerGO.transform.position = this.playerSpawnPoint.position;
+        this.player = playerGO.GetComponent<BattleUnit>();
 
-        // Default to player
-        this.unit = this.player;
+        GameObject enemyGO = Instantiate(enemyPrefab, this.transform, false);
+        enemyGO.transform.position = this.enemySpawnPoint.position;
+        this.enemy = enemyGO.GetComponent<BattleUnit>();        
+        CameraController.Instance.SwitchToCamera(CameraDetails.Name.Battle);
+        
+        switch(encounterType) {
+            // First turn is the enemy only
+            case BaseDungeonEnemy.EncounterType.Ambushed:
+                this.InitEnemyTurn();
+                break;
+            
+            // First turn is the player only
+            case BaseDungeonEnemy.EncounterType.PreEmptive:
+                this.InitPlayerTurn();
+                this.enemyCanAttack = false;
+                break;
+            
+            // Random chance of enemy attacking first 
+            // When player goes first, enemy still has a turn
+            default:
+                if(Random.Range(0, 7) == 1) {
+                    this.InitEnemyTurn();
+                } else {
+                    this.InitPlayerTurn();
+                }
+                break;
+        } // switch
+        
     } // Init
+
+
+    /// <summary>
+    /// Sets the ui and camera for the player to initiate their turn
+    /// </summary>
+    void InitPlayerTurn()
+    {
+        this.unit = this.player;
+        this.EnableBattleCamera();
+        UIController.Instance.DisableAll();
+        UIController.Instance.SwitchToUI(UIDetails.Name.MainBattle);
+        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, true);
+    } // InitPlayerTurn
+
+    /// <summary>
+    /// Disables the UI 
+    /// Triggers the enemy to attack if it can
+    /// Sets the can attack boolean back to true when it cannot
+    /// </summary>
+    void InitEnemyTurn()
+    {
+        this.unit = this.enemy;
+
+        if(!this.enemyCanAttack) {
+            this.enemyCanAttack = true;
+            this.EndAttackPhase();
+            return;
+        }
+
+        UIController.Instance.DisableAll();
+        this.EnableEnemyAttackCamera();
+        this.EnemyAttack();
+    } // InitEnemyTurn
+
+
+    /// <summary>
+    /// Enemy attacks the player
+    /// </summary>
+    void EnemyAttack()
+    {
+        // Skip enemy turn
+        if(!this.enemyCanAttack) {
+            this.enemyCanAttack = true;
+            this.InitPlayerTurn();
+            return;
+        }
+
+        this.EnableEnemyAttackCamera();
+        this.attacksConnected = 1;
+        this.enemy.Attack(this.player);
+    } // EnemyAttack
+
+    /// <summary>
+    /// Disables the UI
+    /// Changes the camera to prayer mode
+    /// Triggers the healing sequence
+    /// </summary>
+    public void Pray()
+    {
+        UIController.Instance.DisableAll();
+        this.EnablePrayerCamera();
+        this.player.TriggerHealing();
+    } // Pray
+
+    /// <summary>
+    /// Enables the attack menu
+    /// Ensures all active buttons are marked as "unselected" by clearing the selected words
+    /// </summary>
+	public void OpenAttackMenu()
+    {
+        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, false);
+        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerAttack, true);
+
+        this.Counter.ResetAttacks();
+        this.DeselectAllWords();
+
+        // Ensure all words are visually shown as deselected
+        foreach(WordContainer word in FindObjectsOfType<WordContainer>()) {
+            if(word.GetComponent<Button>().interactable) {
+                word.GetComponent<Button>().image.color = new Color(1, 1, 1, 1);
+            }
+        }
+    } // OpenAttackMenu
+
+    /// <summary>
+    /// Forces a deselection on all currently selected words
+    /// Empties the selected words list
+    /// </summary>
+    void DeselectAllWords()
+    {
+        foreach(WordContainer word in this.selectedWords) {
+            this.WordDeselected(word);
+        }
+
+        this.selectedWords.Clear();
+    } // DeselectAllWords
+
+    /// <summary>
+    /// Clears any player actions and resets to main battle ui
+    /// </summary>
+    void CloseAttackMenu()
+    {
+        this.Counter.ResetAttacks();
+        this.DeselectAllWords();
+        this.ScriptureContainer.ResetVerse();
+        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerAttack, false);
+        this.InitPlayerTurn();
+    } // CloseAttackMenu
 
 
     /// <summary>
@@ -202,39 +357,6 @@ public class BattleController : BaseController
 
 
     /// <summary>
-    /// Hides the Action Button Menu and shows the word bank
-    /// </summary>
-	public void OnAttackButtonClick()
-    {
-        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, false);
-        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerAttack, true);
-    } // OnAttackButtonClick
-
-    /// <summary>
-    /// Resest all player selection 
-    /// Changes back to the main battle ui
-    /// </summary>
-    void CancelAttack()
-    {
-        // Reset selected words color unless they are disabled
-        // Dump all selected words as to start from 0 again
-        foreach(WordContainer word in this.selectedWords) {
-            if(word.GetComponent<Button>().interactable) {
-                word.GetComponent<Button>().image.color = new Color(1, 1, 1, 1);
-            }
-        }
-
-        this.Counter.ResetAttacks();
-        this.ClearSelectedWords();
-        this.ScriptureContainer.ResetVerse();
-        this.EnableBattleCamera();
-
-        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerAttack, false);
-        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, true);
-    } // CancelAttack
-
-
-    /// <summary>
     /// Handles add/removing words from the verse
     /// </summary>
     public void OnWordContainerClick(WordContainer word)
@@ -264,21 +386,22 @@ public class BattleController : BaseController
             return;
         }
         
+        // Find a vacant spot first before trying to add to the list
         int index = this.selectedWords.IndexOf(null);
         
-        if(index > -1) {
-            
+        if(index > -1) {            
             this.selectedWords[index] = word;
         } else {
             this.selectedWords.Add(word);
             index = this.selectedWords.IndexOf(word);
         }
         
+        // Shows the word is selected
         word.GetComponent<Button>().image.color = new Color(1, 0.92f, 0.016f, 1);
 
         this.Counter.DecreaseRemainingAttacks();
         this.ScriptureContainer.SetWordAtPosition(index, word.WordText.text);
-        this.BeginUnitAttackPhase();
+        this.CheckForAutoPlayerAttackStart();
     } // WordSelected
 
 
@@ -289,73 +412,50 @@ public class BattleController : BaseController
     /// <param name="word"></param>
     void WordDeselected(WordContainer word)
     {
-        if(!this.selectedWords.Contains(word)) {
+        if( word == null || ! this.selectedWords.Contains(word) ) {
             return;
         }
 
         int index = this.selectedWords.IndexOf(word);
 
-        // Setting the index to null, allows another to occupy its place
+        // Setting the word to null, allows another to occupy its place
         this.selectedWords[ this.selectedWords.IndexOf(word) ] = null;
-
         this.ScriptureContainer.RemoveWordAtPosition(index);
         this.Counter.IncreaseRemainingAttacks();
 
-        word.GetComponent<Button>().image.color = new Color(1, 1, 1, 1);
-    } // WordDeselected
-
-
-    /// <summary>
-    /// Forces a deselection on all currently selected words
-    /// Empties the selected words list
-    /// </summary>
-    void ClearSelectedWords()
-    {
-        foreach(WordContainer word in this.selectedWords) {
-            if(word == null) {
-                continue;
-            }
-            this.WordDeselected(word);
+        // A non-interactable words is a word marked as "correct"
+        // thefore we do not mark it as deselected
+        if(word.GetComponent<Button>().interactable) {
+            word.GetComponent<Button>().image.color = new Color(1, 1, 1, 1);
         }
-
-        this.selectedWords.Clear();
-    } // ClearSelectedWords
+    } // WordDeselected   
 
 
     /// <summary>
-    /// Disables the UI
-    /// Triggers the healing sequence
+    /// Checks if player meets criteria to auto start attack sequence
     /// </summary>
-    public void Pray()
+    public void CheckForAutoPlayerAttackStart()
     {
-        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, false);
-        UIController.Instance.SetUIStatus(UIDetails.Name.MainBattle, false);
-        this.EnablePrayerCamera();
-        this.player.TriggerHealing();
-    } // Pray
+        if(this.ScriptureContainer.IsVerseFull || this.Counter.noRemainingAttacks) {
+            this.PlayerAttackPhase();
+        }
+    } // CheckForAutoPlayerAttackStart
 
 
     /// <summary>
-    /// Called after a word is added to see if its time to launch the player attack phase
-    /// Attack phase occurs when either the player has filled all remaining blanks or has
-    /// consumed all of their remaining attacks or commits to attack
+    /// As long as the player has selected at least one word then the attack sequence is launched
     /// </summary>
-    public void BeginUnitAttackPhase(bool force = false)
+    void PlayerAttackPhase()
     {
-        // No words selected
-        if(force && this.Counter.Current == this.Counter.Max) {
+        // No words selected - cannot attack
+        if(this.Counter.Current == this.Counter.Max) {
             return;
-        }
+        }      
 
-        // Switch back to player
-        this.unit = this.player;
-
-        if(force || this.ScriptureContainer.IsVerseFull || this.Counter.noRemainingAttacks) {
-            UIController.Instance.DisableAll();
-            this.Counter.ResetAttacks();
-            this.ValidatePlayerAttack();
-        }
-    } // BeginUnitAttackPhase
+         UIController.Instance.DisableAll();
+         this.Counter.ResetAttacks();
+         this.ValidatePlayerAttack();
+    } // PlayerAttackPhase
 
 
     /// <summary>
@@ -368,43 +468,89 @@ public class BattleController : BaseController
     /// </summary>
     void ValidatePlayerAttack()
     {
-        // End of attack
-        if(this.selectedWords.Count < 1 || this.unit == this.enemy) {
+        // No more attacks left
+        if(this.selectedWords.Count < 1) {
             this.EndAttackPhase();
             return;
         }
 
-        // References the word so that we reset its index and disable it when it is correct
+        // Stores a reference so that we can remove the word from the list
+        // but still interact with the word
         WordContainer word = this.selectedWords[0];
         this.selectedWords.RemoveAt(0);        
 
+        // Correct Word
         if(this.ScriptureContainer.IsNextCorrectWord()) {
             this.attacksConnected++;
-            word.GetComponent<Button>().interactable = false;
             this.EnablePlayerAttackCamera();
-            this.unit.Attack(this.enemy);
-        } else {
-            // Before triggering the enemy attack, the player may have caused damage
-            if(this.attacksConnected > 0) {
-                this.unit.EndAttack();
-                this.unit.InflictDamage(this.attacksConnected);
-            }
+            this.player.Attack(this.enemy);
+            word.GetComponent<Button>().interactable = false;
 
-            this.EnemyAttack();
-        }        
+        // Incorrect Word - Trigger enemy's turn
+        } else {
+            this.EndAttackPhase();
+            //// Stop the player from attacking
+            //this.player.EndAttack();
+            
+            //// Player gots some hits in before selecting a wrong word
+            //if(this.attacksConnected > 0) {
+            //    this.player.InflictDamage(this.attacksConnected);
+            //}
+            
+            //this.InitEnemyTurn();
+        }
     } // ValidatePlayerAttack
 
+    /// <summary>
+    /// Ends the attack phase by calculating total damage
+    /// Inflicting the damage
+    /// Resetting the camera
+    /// and Re-enabling the UI
+    /// The verse is reset but keep in mind only the remaining indexes are updated to blanks
+    /// </summary>
+    void EndAttackPhase()
+    {
+        this.EnableBattleCamera();
+
+        // Resets unit's attack and returns to idle animation
+        this.unit.EndAttack();
+
+        // Apply the total damage 
+        if(this.attacksConnected > 0) {
+            this.unit.InflictDamage(this.attacksConnected);
+            this.attacksConnected = 0;
+        }
+
+        if(this.Counter != null) {
+            this.Counter.ResetAttacks();
+        }
+
+        if( this.ScriptureContainer != null ) {
+            this.ScriptureContainer.ResetVerse();
+        }
+        
+        this.NextRound();       
+    } // EndAttackPhase
 
     /// <summary>
-    /// Enemy attacks the player
+    /// Checks for GameOver/Victory
+    /// Triggers the init phase of the opposing unit of the current unit
     /// </summary>
-    void EnemyAttack()
+    void NextRound()
     {
-        this.EnableEnemyAttackCamera();
-        this.attacksConnected = 1;
-        this.unit = this.enemy;
-        this.unit.Attack(this.player);
-    } // EnemyAttack
+        // Stop here if either one is dead
+        // When the death animation is completed, the victory/game over is auto triggered
+        if(this.player.IsDead() || this.enemy.IsDead() ) {
+            return;
+        }
+
+        // Player is done attacking, let's allow the enemey to attack
+        if(this.unit == this.player) {
+            this.InitEnemyTurn();
+        } else {
+            this.InitPlayerTurn();
+        }
+    } // NextRound
 
 
     /// <summary>
@@ -424,58 +570,6 @@ public class BattleController : BaseController
 
         return target;
     } // GetTargetUnit
-    
-
-    /// <summary>
-    /// Ends the attack phase by calculating total damage
-    /// Inflicting the damage
-    /// Resetting the camera
-    /// and Re-enabling the UI
-    /// The verse is reset but keep in mind only the remaining indexes are updated to blanks
-    /// </summary>
-    void EndAttackPhase()
-    {
-        // Resets unit's attack and returns to idle animation
-        this.unit.EndAttack();
-
-        // Apply the total damage 
-        this.unit.InflictDamage(this.attacksConnected);
-        this.attacksConnected = 0;
-
-        // Reset selecte words color unless they are disabled
-        // Dump all selected words as to start from 0 again
-        foreach(WordContainer word in this.selectedWords) {
-            if(word.GetComponent<Button>().interactable) {
-                word.GetComponent<Button>().image.color = new Color(1, 1, 1, 1);
-            }
-        }
-
-        if(this.Counter != null) {
-            this.Counter.ResetAttacks();
-        }
-
-        if( this.ScriptureContainer != null ) {
-            this.ScriptureContainer.ResetVerse();
-        }
-        
-        this.ClearSelectedWords();
-
-        // Stop here if either one is dead
-        if(this.player.IsDead() || this.enemy.IsDead() ) {
-            return;
-        }
-
-        // Player is done attacking, let's allow the enemey to attack
-        if(this.unit == this.player) {
-            this.EnemyAttack();
-        } else {
-            UIController.Instance.DisableAll();
-            UIController.Instance.SwitchToUI(UIDetails.Name.MainBattle);
-            UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, true);
-            this.EnableBattleCamera();
-        }
-        
-    } // EndAttackPhase
 
 
     /// <summary>
@@ -483,10 +577,7 @@ public class BattleController : BaseController
     /// </summary>
     public void EndPrayPhase()
     {
-        this.EnemyAttack();
-        //this.EnableBattleCamera();
-        //UIController.Instance.SetUIStatus(UIDetails.Name.MainBattle, true);
-        //UIController.Instance.SetUIStatus(UIDetails.Name.PlayerTurn, true);
+        this.InitEnemyTurn();
     } // EndPrayPhase
 
 
@@ -497,7 +588,11 @@ public class BattleController : BaseController
     /// </summary>
     public void AttackAnimationEnd(BattleUnit unit)
     {
-        this.ValidatePlayerAttack();
+        if(this.unit == this.player) {
+            this.ValidatePlayerAttack();
+        } else {
+            this.EndAttackPhase();
+        }
     } // AttackAnimationEnd
 
     /// <summary>
@@ -529,6 +624,8 @@ public class BattleController : BaseController
     void Victory()
     {
         UIController.Instance.DisableAll();
+        Destroy(this.player.gameObject);
+        Destroy(this.enemy.gameObject);
         this.dungeonController.BattleEnd();
     } // Victory
 
@@ -558,7 +655,7 @@ public class BattleController : BaseController
                 this.Pray();
                 break;
             case UIButton.Name.Attack:
-                this.OnAttackButtonClick();
+                this.OpenAttackMenu();
                 break;
             case UIButton.Name.Word:
                 // Ignore empty words
@@ -568,11 +665,11 @@ public class BattleController : BaseController
                 }                
                 break;
             case UIButton.Name.Commit:
-                this.BeginUnitAttackPhase(true);
+                this.PlayerAttackPhase();
                 break;
             case UIButton.Name.Cancel:
-                this.CancelAttack();
+                this.CloseAttackMenu();
                 break;
-        }
+        } // switch
     } // OnButtonReleased
 } // class

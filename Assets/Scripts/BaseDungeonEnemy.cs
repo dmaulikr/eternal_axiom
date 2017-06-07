@@ -23,6 +23,11 @@ public abstract class BaseDungeonEnemy : MonoBehaviour
     public EncounterType encounterType;
 
     /// <summary>
+    /// The prefab to use during a battle sequence
+    /// </summary>
+    public GameObject battlePrefab;
+
+    /// <summary>
     /// A reference to the dungeonController
     /// </summary>
     DungeonController dungeonController;

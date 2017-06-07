@@ -154,6 +154,16 @@ public class PlayerDungeon : MonoBehaviour
         this.Animator.SetFloat("MovingSpeed", 0f);
     } // EnemyEncountered
 
+
+    /// <summary>
+    /// Called once the battle sequence is completed to restore control
+    /// </summary>
+    public void BattleSequenceCompleted()
+    {
+        this.enemyEncountered = false;
+        this.Joystick.InputVector = Vector3.zero;
+    } // BattleSequenceCompleted
+
     /// <summary>
     /// Triggers the hurt animation
     /// Turns on the isHurt flag to avoid control during this time
