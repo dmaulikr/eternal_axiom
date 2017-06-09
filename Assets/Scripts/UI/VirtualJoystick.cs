@@ -32,15 +32,20 @@ public class VirtualJoystick : MonoBehaviour, IDragHandler, IPointerDownHandler,
         set
         {
             this.inputVector = value;
+            this.joystickImg.rectTransform.anchoredPosition = this.inputVector;
         }
-    }
+    } // InputVector
 
+
+    /// <summary>
+    /// Initializes variables
+    /// </summary>
     void Start()
     {
         this.backgroundImg = GetComponent<Image>();
         this.joystickImg = this.transform.Find("Joystick").GetComponent<Image>();
         this.inputVector = Vector3.zero;
-    }
+    } // Start()
 
     /// <summary>
     /// Called continually while the touch point is draged 

@@ -90,6 +90,7 @@ public class DungeonController : BaseController
     /// <param name="enemy">The enemy encountered</param>
     public void BattleEncounter(BaseDungeonEnemy enemy, BaseDungeonEnemy.EncounterType type)
     {
+        enemy.enabled = false;
         this.encounteredEnemy = enemy;
         this.Player.EnemyEncountered();
         // Call is delayed to allow animations to play for a bit before transitioning
@@ -116,7 +117,10 @@ public class DungeonController : BaseController
     {
         this.isBattleStarted = false;
         CameraController.Instance.SwitchToCamera(CameraDetails.Name.Main);
+
+        this.encounteredEnemy.enabled = true;
         this.encounteredEnemy.Defeated();        
+
         this.Player.enabled = true;
         this.Player.BattleSequenceCompleted();
         UIController.Instance.SwitchToUI(UIDetails.Name.Dungeon);

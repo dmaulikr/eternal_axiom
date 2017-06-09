@@ -115,8 +115,6 @@ public class BattleUnit : MonoBehaviour
     /// </summary>
     void Start()
     {
-        this.isAttacking = false;
-        this.isDefending = false;
         this.HealthText.text = this.health.ToString() + " / " + this.maxHealth.ToString();
         this.AnimatorController.SetFloat("Health", this.health);
     } // Start

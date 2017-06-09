@@ -1,11 +1,12 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
 /// Base class for all dungeon enemies to define common interactions
 /// </summary>
-public abstract class BaseDungeonEnemy : MonoBehaviour
+public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
 {
     /// <summary>
     /// Types of enemy encounter
@@ -74,7 +75,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour
     /// <summary>
     /// True when the attack animation is still within "hit frames"
     /// </summary>
-    public bool attackFramesActive = false;
+    public bool isAttacking = false;
 
     /// <summary>
     /// True when the enemy lost the battle
@@ -90,19 +91,18 @@ public abstract class BaseDungeonEnemy : MonoBehaviour
             this.Defeated();
         }
     }
-
-
-    /// <summary>
-    /// Player an enemy collided with neither attacking the other first
-    /// </summary>
-    /// <param name="other"></param>
-    void OnTriggerEnter(Collider other)
-    {
-        if(other.gameObject == this.Player.gameObject) {
-            this.encounterType = EncounterType.Normal;
-            this.PlayerCollision();
-        }        
-    } // OnTriggerEnter
+    
+    ///// <summary>
+    ///// Player an enemy collided with neither attacking the other first
+    ///// </summary>
+    ///// <param name="other"></param>
+    //void OnTriggerEnter(Collider other)
+    //{
+    //    if(other.gameObject == this.Player.gameObject) {            
+    //        this.encounterType = EncounterType.Normal;
+    //        this.PlayerCollision();
+    //    }        
+    //} // OnTriggerEnter
 
     /// <summary>
     /// Triggers the enemy's hurt animation
@@ -129,23 +129,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour
         this.TriggerHurt();
         this.Controller.BattleEncounter(this, EncounterType.PreEmptive);
     } // PlayerAttackConnected
-
-    /// <summary>
-    /// Triggered when the attack animation is within the hit frames
-    /// </summary>
-    public void HitFramesStart()
-    {
-        this.attackFramesActive = true;
-    } // AttackConnects
-
-    /// <summary>
-    /// Triggered when the attack animation is no longer within the hit frames
-    /// </summary>
-    public void HitFramesEnd()
-    {
-        this.attackFramesActive = false;
-    } // HitFramesEnd
-
+    
     /// <summary>
     /// Enemy attacked the player before the player could attack or collide with it
     /// </summary>
@@ -156,20 +140,34 @@ public abstract class BaseDungeonEnemy : MonoBehaviour
     } // AmbushedAttack
 
     /// <summary>
-    /// Collision with the player triggers a hurt state for both the enemy and the player
-    /// Immediatly followed by a transition into the battle sequece
+    /// Triggered by the player when it enter into collision with any of the enemy's trigger collider
+    /// Based on which collider the collision occured with the proper action is apply
     /// </summary>
-    public void PlayerCollision()
+    public void PlayerCollision(string colliderName)
     {
-        // Allow the player's attack to have precedence
-        if(!this.Player.isAttacking) {
-            this.TriggerHurt();
-            this.Player.TriggerHurt();
-            this.Controller.BattleEncounter(this, EncounterType.Normal);
-        // Player is in range of attack
-        } else {
-            this.TriggerAttack();
-        }
+        switch(colliderName) {
+            // Enemy's attack connected
+            case "WeaponCollider":
+                this.Player.TriggerHurt();
+                this.Controller.BattleEncounter(this, EncounterType.Ambushed);
+                break;
+        
+            // Enemy has spotted the player and will engage
+            case "VisionCollider":
+                this.TriggerAttack();
+                break;
+            
+            // Collision without attacking has happened
+            case "EncounterCollider":
+                // Player may have bumped the enemy while it was also attacking it
+                if(this.isAttacking) {
+                    return;
+                }
+                this.TriggerHurt();
+                this.Player.TriggerHurt();
+                this.Controller.BattleEncounter(this, EncounterType.Normal);
+                break;
+        } // switch
     } // PlayerCollision
 
     /// <summary>
@@ -193,7 +191,12 @@ public abstract class BaseDungeonEnemy : MonoBehaviour
     /// <summary>
     /// Called at the end of specific animations 
     /// </summary>
-    public void AnimationEnd(){ }
+    public void AnimationEnd()
+    {
+        if(this.isAttacking) {
+            this.isAttacking = false;
+        }        
+    }
 
     /// <summary>
     /// Called when the death animation is over
@@ -203,4 +206,17 @@ public abstract class BaseDungeonEnemy : MonoBehaviour
     {
          Destroy(this.gameObject, 0.5f);
     }
+
+    /// <summary>
+    /// Triggered on collision enter by a trigger collider
+    /// Determines how to trat the collision based on the object that collided with it
+    /// </summary>
+    /// <param name="colliderName"></param>
+    /// <param name="other"></param>
+    public void OnCollision(string colliderName, Collider other)
+    {
+        if(other.gameObject == this.Player.gameObject) {
+            this.PlayerCollision(colliderName);
+        }
+    } // OnCollision
 } // class

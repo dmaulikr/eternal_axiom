@@ -22,16 +22,16 @@ public class PlayerDungeonSword : MonoBehaviour
         }
     } // Player
 
-	/// <summary>
+    /// <summary>
     /// On collision with the player initiate the battle sequence
     /// </summary>
     /// <param name="other"></param>
-	void OnTriggerStay(Collider other)
+    void OnTriggerStay(Collider other)
     {
-        BaseDungeonEnemy enemy  = other.GetComponent<BaseDungeonEnemy>();
+        BaseDungeonEnemy enemy = other.GetComponent<BaseDungeonEnemy>();
 
         if(this.Player.attackFramesActive && enemy != null) {
             enemy.PlayerAttackConnected();
-        }        
-    } // OnTriggerEnter
+        }
+    } // OnTriggerStay
 }

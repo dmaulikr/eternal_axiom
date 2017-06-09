@@ -6,5 +6,5 @@ using UnityEngine;
 /// Handles the Goblin enemy's AI while in the Dungeon
 /// </summary>
 public class GolbinDungeonAI : BaseDungeonEnemy
-{    
+{
 }

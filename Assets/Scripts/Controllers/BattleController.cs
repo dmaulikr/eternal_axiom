@@ -239,7 +239,6 @@ public class BattleController : BaseController
         }
 
         UIController.Instance.DisableAll();
-        this.EnableEnemyAttackCamera();
         this.EnemyAttack();
     } // InitEnemyTurn
 
@@ -318,44 +317,6 @@ public class BattleController : BaseController
         this.InitPlayerTurn();
     } // CloseAttackMenu
 
-
-    /// <summary>
-    /// Enables the Battle Camera
-    /// Disables the Attack Camera
-    /// </summary>
-    void EnableBattleCamera()
-    {
-        CameraController.Instance.SwitchToCamera(CameraDetails.Name.Battle);
-    } // EnableBattleCamera
-
-
-    /// <summary>
-    /// Enables the prayer camera
-    /// </summary>
-    void EnablePrayerCamera()
-    {
-        CameraController.Instance.SwitchToCamera(CameraDetails.Name.Prayer);
-    } // EnablePrayerCamera
-
-
-    /// <summary>
-    /// Enables the Attack Camera
-    /// </summary>
-    void EnablePlayerAttackCamera()
-    {
-        CameraController.Instance.SwitchToCamera(CameraDetails.Name.PlayerAttack);
-    } // EnablePlayerAttackCamera
-
-
-    /// <summary>
-    /// Enables the Battle Camera
-    /// </summary>
-    void EnableEnemyAttackCamera()
-    {
-        CameraController.Instance.SwitchToCamera(CameraDetails.Name.EnemyAttack);
-    } // EnablePlayerBattleCamera
-
-
     /// <summary>
     /// Handles add/removing words from the verse
     /// </summary>
@@ -369,7 +330,6 @@ public class BattleController : BaseController
             this.WordSelected(word);
         }
     } // OnWordContainerClick
-
 
     /// <summary>
     /// Word being added to the verse
@@ -404,7 +364,6 @@ public class BattleController : BaseController
         this.CheckForAutoPlayerAttackStart();
     } // WordSelected
 
-
     /// <summary>
     /// Word being removed from the verse
     /// Re-calculated remaining words indexes
@@ -430,7 +389,6 @@ public class BattleController : BaseController
         }
     } // WordDeselected   
 
-
     /// <summary>
     /// Checks if player meets criteria to auto start attack sequence
     /// </summary>
@@ -440,7 +398,6 @@ public class BattleController : BaseController
             this.PlayerAttackPhase();
         }
     } // CheckForAutoPlayerAttackStart
-
 
     /// <summary>
     /// As long as the player has selected at least one word then the attack sequence is launched
@@ -456,7 +413,6 @@ public class BattleController : BaseController
          this.Counter.ResetAttacks();
          this.ValidatePlayerAttack();
     } // PlayerAttackPhase
-
 
     /// <summary>
     /// Called at the beginning of each attack to see if the 
@@ -489,15 +445,6 @@ public class BattleController : BaseController
         // Incorrect Word - Trigger enemy's turn
         } else {
             this.EndAttackPhase();
-            //// Stop the player from attacking
-            //this.player.EndAttack();
-            
-            //// Player gots some hits in before selecting a wrong word
-            //if(this.attacksConnected > 0) {
-            //    this.player.InflictDamage(this.attacksConnected);
-            //}
-            
-            //this.InitEnemyTurn();
         }
     } // ValidatePlayerAttack
 
@@ -672,4 +619,40 @@ public class BattleController : BaseController
                 break;
         } // switch
     } // OnButtonReleased
+
+    /// <summary>
+    /// Enables the Battle Camera
+    /// Disables the Attack Camera
+    /// </summary>
+    void EnableBattleCamera()
+    {
+        CameraController.Instance.SwitchToCamera(CameraDetails.Name.Battle);
+    } // EnableBattleCamera
+
+
+    /// <summary>
+    /// Enables the prayer camera
+    /// </summary>
+    void EnablePrayerCamera()
+    {
+        CameraController.Instance.SwitchToCamera(CameraDetails.Name.Prayer);
+    } // EnablePrayerCamera
+
+
+    /// <summary>
+    /// Enables the Attack Camera
+    /// </summary>
+    void EnablePlayerAttackCamera()
+    {
+        CameraController.Instance.SwitchToCamera(CameraDetails.Name.PlayerAttack);
+    } // EnablePlayerAttackCamera
+
+
+    /// <summary>
+    /// Enables the Battle Camera
+    /// </summary>
+    void EnableEnemyAttackCamera()
+    {
+        CameraController.Instance.SwitchToCamera(CameraDetails.Name.EnemyAttack);
+    } // EnablePlayerBattleCamera
 } // class

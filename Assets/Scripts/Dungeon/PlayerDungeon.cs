@@ -1,8 +1,9 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PlayerDungeon : MonoBehaviour
+public class PlayerDungeon : MonoBehaviour, ICollideable
 {
     /// <summary>
     /// How much to slow down the movement by
@@ -113,9 +114,14 @@ public class PlayerDungeon : MonoBehaviour
     void Update()
     {
         // Joystick may not loaded. If so, stop execution
-        if(this.Joystick == null || this.isAttacking || this.isHurt || this.enemyEncountered) {
+        if( !this.CanMove() ) {
             // Stop moving
-            this.Rigidbody.velocity = Vector3.zero; 
+            this.Rigidbody.velocity = Vector3.zero;
+
+            if(this.Joystick != null) {
+                this.Joystick.InputVector = Vector3.zero;
+            }
+
             return;
         }
 
@@ -127,6 +133,17 @@ public class PlayerDungeon : MonoBehaviour
         // Move
         this.Move(this.MovementVector);
     } // Update
+
+    /// <summary>
+    /// Returns TRUE when the player can move their avatar
+    /// </summary>
+    /// <returns></returns>
+    bool CanMove()
+    {
+        return this.Joystick != null && 
+               !this.isHurt && 
+               !this.enemyEncountered;
+    } // CanMove
 
     /// <summary>
     /// Triggers the attack animation
@@ -303,4 +320,23 @@ public class PlayerDungeon : MonoBehaviour
             this.isHurt = false;
         }
     } // AnimationEnd
+
+    /// <summary>
+    /// Triggered by a collision with the sword
+    /// </summary>
+    /// <param name="colliderName"></param>
+    /// <param name="other"></param>
+    public void OnCollision(string colliderName, Collider other)
+    {
+        if(colliderName != "SwordCollider") {
+            return;
+        }
+
+        BaseDungeonEnemy enemy = other.GetComponent<BaseDungeonEnemy>();
+        if(enemy == null) {
+            return;
+        }
+
+        enemy.PlayerAttackConnected();
+    } // OnCollision
 } // class
