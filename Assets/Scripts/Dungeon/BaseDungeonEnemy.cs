@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 
 /// <summary>
 /// Base class for all dungeon enemies to define common interactions
@@ -73,6 +74,21 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // Animator
 
     /// <summary>
+    /// References the navigation mesh agent
+    /// </summary>
+    NavMeshAgent navAgent;
+    protected NavMeshAgent NavAgent
+    {
+        get
+        {
+            if(this.navAgent == null) {
+                this.navAgent = GetComponent<NavMeshAgent>();
+            }
+            return this.navAgent;
+        }
+    } // NavAgent
+
+    /// <summary>
     /// True when the attack animation is still within "hit frames"
     /// </summary>
     public bool isAttacking = false;
@@ -82,7 +98,26 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// </summary>
     [SerializeField]
     bool isDead = false;
+
+    /// <summary>
+    /// Don't repeat the death trigger
+    /// </summary>
     bool dontRepeat = false;
+
+    /// <summary>
+    /// The states the unit can be
+    /// </summary>
+    protected enum State
+    {
+        Idle,
+        Patrol,
+        Alert,
+    } // State
+
+    /// <summary>
+    /// Current unit state
+    /// </summary>
+    protected State state = State.Patrol;
 
     void Update()
     {
@@ -151,10 +186,15 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
                 this.Player.TriggerHurt();
                 this.Controller.BattleEncounter(this, EncounterType.Ambushed);
                 break;
-        
+
             // Enemy has spotted the player and will engage
-            case "VisionCollider":
+            case "EngageCollider":
                 this.TriggerAttack();
+                break;
+        
+            // Player Spotted
+            case "VisionCollider":
+                this.state = State.Alert;
                 break;
             
             // Collision without attacking has happened
