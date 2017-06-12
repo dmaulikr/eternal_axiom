@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using System.Linq;
 
 /// <summary>
 /// Base class for all dungeon enemies to define common interactions
@@ -109,9 +110,16 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// </summary>
     protected enum State
     {
+        Wait,
         Idle,
         Patrol,
         Alert,
+        Pursuit,
+        Scout,
+        Hurt,
+        Attack,
+        Encounter,
+        Death
     } // State
 
     /// <summary>
@@ -119,25 +127,347 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// </summary>
     protected State state = State.Patrol;
 
+    /// <summary>
+    /// Animation tags for the matching state
+    /// </summary>
+    protected Dictionary<State, string> animationTags = new Dictionary<State, string> {
+        { State.Idle, "Idle" },
+        { State.Attack, "Attack" },
+        { State.Hurt, "Hurt" },
+        { State.Death, "Death" },
+    };
+
+    /// <summary>
+    /// A collection of hash animator triggers based on the state
+    /// </summary>
+    protected Dictionary<State, int> hashAnimTriggers = new Dictionary<State, int> {
+        { State.Attack, Animator.StringToHash("Attack")},
+        { State.Hurt, Animator.StringToHash("Hurt")},
+        { State.Death, Animator.StringToHash("Death")},
+    };
+
+    /// <summary>
+    /// A hash reference to the speed animator parameter
+    /// </summary>
+    protected readonly int hashSpeedParam = Animator.StringToHash("Speed");
+
+    /// <summary>
+    /// How many ticks the unit has been in idle
+    /// </summary>
+    protected int idleCount = 0;
+
+    /// <summary>
+    /// Total time to wait while Idled in millisecons
+    /// </summary>
+    protected int maxIdleTime = 2500;
+
+     /// <summary>
+    /// A list of all the navigation points an enemy can move to
+    /// </summary>
+    [SerializeField]
+    protected List<Transform> navPoints;
+
+    /// <summary>
+    /// The current navigation point being moved to
+    /// </summary>
+    protected int curNavIndex = 0;
+
+    /// <summary>
+    /// How far to the destination before it is considered as "arrived"
+    /// </summary>
+    [SerializeField]
+    protected float distancePad = 0.3f;
+
+    /// <summary>
+    /// How to transition into the next speed
+    /// </summary>
+    [SerializeField]
+    protected float speedDamp = 0.1f;
+
+    /// <summary>
+    /// How fast/smooth to rotate
+    /// Higher values means faster less smooth turns
+    /// </summary>
+    [SerializeField]
+    protected float rotationSpeed = 15f;
+
+    /// <summary>
+    /// Prevents multiple triggers of the coroutine to change current nav point index
+    /// </summary>
+    protected bool isChangeLocationTriggered = false;
+
+    /// <summary>
+    /// How long in seconds the unit waits before changing to the next nav point
+    /// </summary>
+    protected float patrolDelayTime = 2f;
+
+    /// <summary>
+    /// The target this unit will pursuit when in "alert" mode
+    /// </summary>
+    [SerializeField]
+    protected GameObject targetGO;
+
+    /// <summary>
+    /// A list of directions in degrees for the unit to scout
+    /// flags indicate whether the unit has scouted that direction or not
+    /// </summary>
+    Dictionary<float, bool> scoutedDirections = new Dictionary<float, bool>() {
+        {0f, false},
+        {90f, false},
+        {180f, false},
+        {360f, false},
+    };
+
+    /// <summary>
+    /// Increased on each tick the unit is scouting a specific location
+    /// </summary>
+    int scoutCount = 0;
+
+    /// <summary>
+    /// Total time the unit faces a scouted direction in millisecons
+    /// </summary>
+    int maxScoutTime = 2000;
+    private bool isScoutingADirection;
+    private Vector3 lastPlayerPosition;
+
+    /// <summary>
+    /// Calls the method associated with the current state
+    /// </summary>
     void Update()
     {
-        if(this.isDead && ! dontRepeat) {
+        if(this.isDead && !dontRepeat) {
             dontRepeat = true;
             this.Defeated();
         }
     }
+
+    /// <summary>
+    /// Tr
+    /// </summary>
+    /// <param name="state"></param>
+    protected void SetAnimatorTriggerByState(State state)
+    {
+        if( this.animator.GetCurrentAnimatorStateInfo(0).tagHash != this.hashAnimTriggers[state] ) {
+            this.animator.SetTrigger(this.hashAnimTriggers[state]);
+        }
+    }
+
+    /// <summary>
+    /// Checks if the player is within the field of vision for this unit
+    /// Returns True when the unit has direct "sight" of the player
+    /// </summary>
+    /// <returns></returns>
+    protected bool IsPlayerInSight()
+    {
+        bool inSight = false;
+        return inSight;
+    }
+
+    /// <summary>
+    /// Handles the Idle sequence
+    /// If player is spotted while in Idle mode triggers Alert
+    /// When idle time is over a transition to Patrol is triggered
+    /// </summary>
+    protected virtual void Idle()
+    {
+        this.SetAnimatorTriggerByState(State.Idle);
+
+        if(this.IsPlayerInSight()) {
+            this.TransitionToState(State.Alert);
+            return;
+        }
+
+        this.idleCount++;
+        if(this.idleCount >= this.maxIdleTime) {
+            this.idleCount = 0;
+            this.TransitionToState(State.Patrol);
+        }
+    }
+
+    /// <summary>
+    /// Handles the Patrol sequence
+    /// While the unit has not reach the current patrol point the unit moves to it
+    /// When the point is reached, the navigation points moves to the next available point
+    /// and a transition to Idle is triggered
+    /// If the player is spotted it triggers a transition to engage the player
+    /// </summary>
+    protected virtual void Patrol()
+    {
+        // Navpoint is unknown - return to Idle
+        if(this.navPoints == null || this.navPoints.Count < 1) {
+            return;
+        }
+
+        // Player Spotted
+        if(this.IsPlayerInSight()) {
+            this.TransitionToState(State.Alert);
+            return;
+        }
+
+        bool hasReached = Vector3.Distance(this.navPoints[this.curNavIndex].position, 
+                                           this.transform.position) 
+                                           < this.distancePad;
+        // Destination Reached
+        if(hasReached) {
+            this.curNavIndex++;
+
+            if(this.curNavIndex >= this.navPoints.Count) {
+                this.curNavIndex = 0;
+            }
+
+            this.TransitionToState(State.Idle);
+
+        // Resume/Continue moving
+        } else {
+            // this.NavAgent.Resume();
+            this.NavAgent.SetDestination(this.navPoints[this.curNavIndex].position);
+        }
+    }
+
+    /// <summary>
+    /// Handles the Scout sequence
+    /// During Scout mode, the enemy looks around to try and spot the player
+    /// When the player is spotted it triggers a transition to engage the player
+    /// If the player remains unspotted for a given time the enemy transitions to Patrol
+    /// </summary>
+    protected virtual void Scout()
+    {
+        if(!this.isScoutingADirection) {
+            this.isScoutingADirection = true;
+
+            bool isScoutDone = this.scoutedDirections.Values.Distinct().Count() == 1;
+            
+            if(isScoutDone) {
+                this.TransitionToState(State.Patrol);
+                return;
+            } else {
+                float curRotation = this.scoutedDirections.First(pair => pair.Value == false).Key;
+                this.scoutedDirections[curRotation] = true;
+                this.transform.rotation = Quaternion.Euler(new Vector3(0f, curRotation, 0f));
+            }           
+        }        
+
+        if(this.IsPlayerInSight()) {
+            this.TransitionToState(State.Alert);
+            return;
+        }
+
+        this.scoutCount++;
+        if(this.scoutCount >= this.maxScoutTime) {
+            this.scoutCount = 0;
+            this.isScoutingADirection = false;
+        }
+    }
+
+    /// <summary>
+    /// Handles the Alert sequence
+    /// While the player is in sight but too far to pursue the enemy will go to the player's last
+    /// known position. If the player is close enough a transition to pursue is triggered
+    /// If player's last position is reached and player is not in sight then a transition to
+    /// Scout is triggered
+    /// </summary>
+    protected virtual void Alert()
+    {
+        bool playerSpotted = this.IsPlayerInSight();
+        this.NavAgent.SetDestination(this.lastPlayerPosition);
+        this.SetAnimatorTriggerByState(State.Alert);
+
+        // Player still in sight but too far away to pursue
+        if(playerSpotted && Vector3.Distance(this.lastPlayerPosition, this.transform.position) > 3f) {
+            this.lastPlayerPosition = this.Player.transform.position;
+
+        // Check if player is still in sight
+        } else if(playerSpotted){
+            this.TransitionToState(State.Pursuit);
+
+        // Destination Reached
+        } else if(Vector3.Distance(this.lastPlayerPosition, this.transform.position) < 1f) {
+            this.TransitionToState(State.Scout);
+        }
+    }
+
+    /// <summary>
+    /// Handles the Pursuit sequence
+    /// While the player remains visible the enemy runs towards the player's last
+    /// known visible position. 
+    /// If the player is within attacking range then a transition to Attack is triggered
+    /// If the enemy reaches the player's last known destination and the player remains
+    /// unseen for a given amount of time then a transition to Scout is triggered
+    /// </summary>
+    protected virtual void Pursuit()
+    {
+        bool playerSpotted = this.IsPlayerInSight();
+
+        if(playerSpotted) {
+            this.SetAnimatorTriggerByState(State.Pursuit);
+            this.NavAgent.SetDestination(this.lastPlayerPosition);
+        }        
+    }
     
-    ///// <summary>
-    ///// Player an enemy collided with neither attacking the other first
-    ///// </summary>
-    ///// <param name="other"></param>
-    //void OnTriggerEnter(Collider other)
-    //{
-    //    if(other.gameObject == this.Player.gameObject) {            
-    //        this.encounterType = EncounterType.Normal;
-    //        this.PlayerCollision();
-    //    }        
-    //} // OnTriggerEnter
+    /// <summary>
+    /// Handles the Attack sequence
+    /// Triggers the attack animation (once)
+    /// Rotates to face the player while the player is still visible
+    /// Waits for the animation to complete 
+    /// If the player is hit then a transition to Encounter is triggered
+    /// If the animation is completed, the player is still seen, and the attack
+    /// did not connected then a transition to Pursuit is tiggered
+    /// </summary>
+    protected virtual void Attack()
+    {
+
+    }
+
+    /// <summary>
+    /// Handles the Hurt sequence
+    /// This occurs when the player attack connects with the enemy
+    /// </summary>
+    protected virtual void Hurt()
+    {
+
+    }
+
+    /// <summary>
+    /// Handles the Encounter sequence
+    /// Encounters may occur when:
+    ///     - Enemy attack connects with the player (ambushed)
+    ///     - Player attack connects with enemy (pre-emptive)
+    ///     - Collision with player (normal)
+    /// </summary>
+    protected virtual void Encounter()
+    {
+
+    }
+
+    /// <summary>
+    /// Handles the Death sequence
+    /// Triggers the Death animation
+    /// Disables physics and collider
+    /// Waits for the animation to complete
+    /// </summary>
+    protected virtual void Death()
+    {
+
+    }
+
+    /// <summary>
+    /// Handles the Wait sequence
+    /// A wait sequence is used to prevent the unit from triggering
+    /// another action while waiting for a previous one to complete
+    /// More or less a place holder to halt all other actions
+    /// </summary>
+    protected virtual void Wait(){}
+
+    /// <summary>
+    /// Handles transitioning from state to state
+    /// Sets the unit's movement/animation speed
+    /// Handles variable updates and cleanup
+    /// </summary>
+    /// <param name="state"></param>
+    protected virtual void TransitionToState(State state)
+    {
+
+    }
 
     /// <summary>
     /// Triggers the enemy's hurt animation

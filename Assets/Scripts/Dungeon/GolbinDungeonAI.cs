@@ -8,52 +8,6 @@ using UnityEngine;
 public class GolbinDungeonAI : BaseDungeonEnemy
 {
     /// <summary>
-    /// A list of all the navigation points an enemy can move to
-    /// </summary>
-    [SerializeField]
-    List<Transform> navPoints;
-
-    /// <summary>
-    /// The current navigation point being moved to
-    /// </summary>
-    int curNavIndex = 0;
-
-    /// <summary>
-    /// How far to the destination before it is considered as "arrived"
-    /// </summary>
-    [SerializeField]
-    float distancePad = 0.3f;
-
-    /// <summary>
-    /// How to transition into the next speed
-    /// </summary>
-    [SerializeField]
-    float speedDamp = 0.1f;
-
-    /// <summary>
-    /// How fast/smooth to rotate
-    /// Higher values means faster less smooth turns
-    /// </summary>
-    [SerializeField]
-    private float rotationSpeed = 15f;
-
-    /// <summary>
-    /// Prevents multiple triggers of the coroutine to change current nav point index
-    /// </summary>
-    private bool isChangeLocationTriggered = false;
-
-    /// <summary>
-    /// How long in seconds the unit waits before changing to the next nav point
-    /// </summary>
-    private float patrolDelayTime = 2f;
-
-    /// <summary>
-    /// The target this unit will pursuit when in "alert" mode
-    /// </summary>
-    [SerializeField]
-    GameObject targetGO;
-
-    /// <summary>
     /// Finds the target to follow when in Alert state
     /// </summary>
     void Start()
