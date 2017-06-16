@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.AI;
 using System.Linq;
@@ -108,7 +109,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// <summary>
     /// The states the unit can be
     /// </summary>
-    protected enum State
+    public enum State
     {
         Wait,
         Idle,
@@ -123,9 +124,41 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // State
 
     /// <summary>
+    /// Holds the method to invoke based on the current state
+    /// </summary>
+    private MethodInfo currentStateMethod = null;
+
+    /// <summary>
     /// Current unit state
     /// </summary>
-    protected State state = State.Patrol;
+    [SerializeField]
+    private State state;
+    public State EnemyState
+    {
+        get
+        {
+            return this.state;
+        }
+
+        set
+        {
+            Type type = this.GetType();
+
+            // States will typically be "private" methods but we want to add 
+            // the flexibility of having public methods too
+            // Finally, we must provide "Instance" to invoke private methods
+            MethodInfo method = type.GetMethod( 
+                value.ToString(), 
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public
+            );
+
+            // Valid state, can change state
+            if( method != null ) {
+                this.state = value;
+                this.currentStateMethod = method;
+            }
+        }
+    } // EnemyState
 
     /// <summary>
     /// Animation tags for the matching state
@@ -159,7 +192,8 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// <summary>
     /// Total time to wait while Idled in millisecons
     /// </summary>
-    protected int maxIdleTime = 2500;
+    [SerializeField]
+    protected int maxIdleTime = 250;
 
      /// <summary>
     /// A list of all the navigation points an enemy can move to
@@ -231,14 +265,116 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     private Vector3 lastPlayerPosition;
 
     /// <summary>
+    /// How fast the unit moves while patrolling
+    /// </summary>
+    [SerializeField]
+    protected float patrolSpeed = 1.5f;
+
+    /// <summary>
+    /// The mechanim speed that represents the unit patrolling
+    /// </summary>
+    [SerializeField] 
+    protected float patrolAnimationSpeed = 0.5f;
+
+    /// <summary>
+    /// How fast the unit moves when pursuing its target
+    /// </summary>
+    [SerializeField]
+    protected float pursuitSpeed = 3f;
+
+    /// <summary>
+    /// The mechanim speed that represents the unit pursuing
+    /// </summary>
+    [SerializeField] 
+    protected float pursuitAnimationSpeed = 1f;
+
+    /// <summary>
+    /// The current speed to set the animation mechanim to 
+    /// The purpouse being to slowly transition to this speed and not snap into it
+    /// </summary>
+    private float currentAnimationSpeed = 0f;
+
+    /// <summary>
+    /// Initialize
+    /// </summary>
+    void Awake()
+    {
+        this.TransitionToState(State.Idle);
+        this.targetGO = GameObject.FindObjectOfType<PlayerDungeon>().gameObject;
+    }
+
+    /// <summary>
     /// Calls the method associated with the current state
     /// </summary>
     void Update()
     {
-        if(this.isDead && !dontRepeat) {
-            dontRepeat = true;
-            this.Defeated();
+        //if(this.isDead && !dontRepeat) {
+        //    dontRepeat = true;
+        //    this.Defeated();
+        //}
+        if(this.currentStateMethod != null) {
+            this.currentStateMethod.Invoke(this, null);
+        } 
+    }
+
+    /// <summary>
+    /// Applies physics
+    /// </summary>
+    void FixedUpdate()
+    {
+        this.Move();
+        this.Rotate();       
+    }
+
+    /// <summary>
+    /// Updates the units animation speed to simulate movement
+    /// </summary>
+    void Move()
+    {
+        this.Animator.SetFloat(this.hashSpeedParam, 
+                                this.currentAnimationSpeed, 
+                                this.speedDamp, 
+                                Time.deltaTime);
+    } // Move
+
+    /// <summary>
+    /// Rotates the gameobject to match the navagent's desired velocity
+    /// </summary>
+    void Rotate()
+    {
+        // Does not need to rotate
+        if(this.NavAgent.desiredVelocity == Vector3.zero) {
+            return;
         }
+
+        Quaternion targetRotation = Quaternion.LookRotation(this.NavAgent.desiredVelocity);
+        this.transform.rotation = Quaternion.Lerp(this.transform.rotation,
+                                                  targetRotation,
+                                                  this.rotationSpeed * Time.deltaTime);
+    } // Rotate
+
+    /// <summary>
+    /// Handles transitioning from state to state
+    /// Sets the unit's movement/animation speed
+    /// Handles variable updates and cleanup
+    /// </summary>
+    /// <param name="state"></param>
+    protected virtual void TransitionToState(State state)
+    {
+        switch(state) {
+            case State.Idle:
+                this.NavAgent.Stop();
+                this.NavAgent.speed = 0f;
+                this.currentAnimationSpeed = 0f;
+                break;
+            case State.Patrol:
+                this.NavAgent.Resume();
+                this.NavAgent.speed = this.patrolSpeed;
+                this.currentAnimationSpeed = this.patrolAnimationSpeed;
+                break;
+        } // switch
+
+        this.EnemyState = state;
     }
 
     /// <summary>
@@ -253,30 +389,12 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
-    /// Checks if the player is within the field of vision for this unit
-    /// Returns True when the unit has direct "sight" of the player
-    /// </summary>
-    /// <returns></returns>
-    protected bool IsPlayerInSight()
-    {
-        bool inSight = false;
-        return inSight;
-    }
-
-    /// <summary>
     /// Handles the Idle sequence
     /// If player is spotted while in Idle mode triggers Alert
     /// When idle time is over a transition to Patrol is triggered
     /// </summary>
     protected virtual void Idle()
     {
-        this.SetAnimatorTriggerByState(State.Idle);
-
-        if(this.IsPlayerInSight()) {
-            this.TransitionToState(State.Alert);
-            return;
-        }
-
         this.idleCount++;
         if(this.idleCount >= this.maxIdleTime) {
             this.idleCount = 0;
@@ -295,20 +413,15 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     {
         // Navpoint is unknown - return to Idle
         if(this.navPoints == null || this.navPoints.Count < 1) {
+            this.TransitionToState(State.Idle);
             return;
         }
-
-        // Player Spotted
-        if(this.IsPlayerInSight()) {
-            this.TransitionToState(State.Alert);
-            return;
-        }
-
-        bool hasReached = Vector3.Distance(this.navPoints[this.curNavIndex].position, 
-                                           this.transform.position) 
-                                           < this.distancePad;
+       
+        bool destinationReached = Vector3.Distance(this.navPoints[this.curNavIndex].position, 
+                                                   this.transform.position) 
+                                                   < this.distancePad;
         // Destination Reached
-        if(hasReached) {
+        if(destinationReached) {
             this.curNavIndex++;
 
             if(this.curNavIndex >= this.navPoints.Count) {
@@ -319,10 +432,20 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
 
         // Resume/Continue moving
         } else {
-            // this.NavAgent.Resume();
             this.NavAgent.SetDestination(this.navPoints[this.curNavIndex].position);
         }
     }
+
+    /// <summary>
+    /// Checks if the player is within the field of vision for this unit
+    /// Returns True when the unit has direct "sight" of the player
+    /// </summary>
+    /// <returns></returns>
+    protected bool IsPlayerInSight()
+    {
+        bool inSight = false;
+        return inSight;
+    }    
 
     /// <summary>
     /// Handles the Scout sequence
@@ -398,10 +521,10 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     {
         bool playerSpotted = this.IsPlayerInSight();
 
-        if(playerSpotted) {
+        if(playerSpotted) { 
             this.SetAnimatorTriggerByState(State.Pursuit);
             this.NavAgent.SetDestination(this.lastPlayerPosition);
-        }        
+        }
     }
     
     /// <summary>
@@ -457,17 +580,6 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// More or less a place holder to halt all other actions
     /// </summary>
     protected virtual void Wait(){}
-
-    /// <summary>
-    /// Handles transitioning from state to state
-    /// Sets the unit's movement/animation speed
-    /// Handles variable updates and cleanup
-    /// </summary>
-    /// <param name="state"></param>
-    protected virtual void TransitionToState(State state)
-    {
-
-    }
 
     /// <summary>
     /// Triggers the enemy's hurt animation
