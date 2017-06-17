@@ -64,13 +64,33 @@ public class FieldOfView : MonoBehaviour
     public Mesh viewMesh;
 
     /// <summary>
-    /// Triggers the visible target finder
+    /// The material assigned to the mesh renderer
+    /// </summary>
+    public Material meshMaterial;
+
+    /// <summary>
+    /// Color to update the mesh material with
+    /// </summary>
+    Color meshColor;
+    public Color MeshColor
+    {
+        set
+        {
+            this.meshColor = value;
+        }
+    }
+
+    /// <summary>
+    /// Creates the mesh to render
+    /// Sets the material to the local <see cref="this.meshMaterial"/> to allows to change the color
+    /// Starts the coroutine to find a target
     /// </summary>
     void Start()
     {
         this.viewMesh = new Mesh();
         this.viewMesh.name = "ViewMesh";
         this.viewMeshFilter.mesh = this.viewMesh;
+        this.viewMeshFilter.GetComponent<MeshRenderer>().material = this.meshMaterial;
 
         StartCoroutine("FindTargetsWithDelay", this.findTargetDelay);
     }
@@ -118,7 +138,6 @@ public class FieldOfView : MonoBehaviour
                 float distanceToTarget = Vector3.Distance(this.transform.position, target.position);
 
                 if( !Physics.Raycast(transform.position, directionToTarget, distanceToTarget, this.obstacleMask) ) {
-                    Debug.Log(target.name + " is in view");
                     this.visibleTargets.Add(target);
                 }
             }
@@ -204,6 +223,7 @@ public class FieldOfView : MonoBehaviour
 
         // Re-draw the mesh
         this.viewMesh.Clear();
+        this.meshMaterial.color = this.meshColor;
         this.viewMesh.vertices = vertices;
         this.viewMesh.triangles = triangles;
         this.viewMesh.RecalculateNormals();

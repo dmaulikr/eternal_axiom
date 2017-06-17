@@ -9,6 +9,9 @@ using System.Linq;
 /// <summary>
 /// Base class for all dungeon enemies to define common interactions
 /// </summary>
+[RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(NavMeshAgent))]
+[RequireComponent(typeof(FieldOfView))]
 public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
 {
     /// <summary>
@@ -89,6 +92,21 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
             return this.navAgent;
         }
     } // NavAgent
+
+    /// <summary>
+    /// A reference to the field of view component
+    /// </summary>
+    FieldOfView fow;
+    protected FieldOfView FieldOfView
+    {
+        get
+        {
+            if(this.fow == null) {
+                this.fow = GetComponent<FieldOfView>();
+            }
+            return this.fow;
+        }
+    }
 
     /// <summary>
     /// True when the attack animation is still within "hit frames"
@@ -280,7 +298,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// How fast the unit moves when pursuing its target
     /// </summary>
     [SerializeField]
-    protected float pursuitSpeed = 3f;
+    protected float pursuitSpeed = 2.0f;
 
     /// <summary>
     /// The mechanim speed that represents the unit pursuing
@@ -293,6 +311,36 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// The purpouse being to slowly transition to this speed and not snap into it
     /// </summary>
     private float currentAnimationSpeed = 0f;
+
+    /// <summary>
+    /// Field of View Color for when the unit is not aware of the player's location
+    /// </summary>
+    [SerializeField]
+    Color normalFOWColor = Color.blue;
+
+    /// <summary>
+    /// Field of View Color for when the unit is scouting for the player
+    /// </summary>
+    [SerializeField]
+    Color alertFOWColor = Color.yellow;
+
+    /// <summary>
+    /// Field of View Color for when the unit is actively pursuing the player
+    /// </summary>
+    [SerializeField]
+    Color pursuitFOWColor = Color.red;
+
+    /// <summary>
+    /// Keeps tracks of how many ticks the unit has been in alert mode
+    /// </summary>
+    [SerializeField]
+    protected int alertCounter = 0;
+
+    /// <summary>
+    /// Maximum clicks the unit will spend in alert mode
+    /// </summary>
+    protected int maxAlertDelay = 100;
+
 
     /// <summary>
     /// Initialize
@@ -314,16 +362,18 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
         //}
         if(this.currentStateMethod != null) {
             this.currentStateMethod.Invoke(this, null);
-        } 
+        }
     }
 
     /// <summary>
     /// Applies physics
+    /// Updates the field of view color
     /// </summary>
     void FixedUpdate()
     {
         this.Move();
-        this.Rotate();       
+        this.Rotate();
+        this.UpdateFieldOfViewColor();
     }
 
     /// <summary>
@@ -354,6 +404,25 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // Rotate
 
     /// <summary>
+    /// Sets the color of the field of view based on the current state
+    /// </summary>
+    protected void UpdateFieldOfViewColor()
+    {
+        switch(this.state) {
+            case State.Alert:
+            case State.Scout:
+                this.FieldOfView.MeshColor = this.alertFOWColor;
+                break;
+            case State.Pursuit:
+                this.FieldOfView.MeshColor = this.pursuitFOWColor;
+                break;
+            default:
+                this.FieldOfView.MeshColor = this.normalFOWColor;
+                break;
+        }
+    }
+
+    /// <summary>
     /// Handles transitioning from state to state
     /// Sets the unit's movement/animation speed
     /// Handles variable updates and cleanup
@@ -372,6 +441,12 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
                 this.NavAgent.speed = this.patrolSpeed;
                 this.currentAnimationSpeed = this.patrolAnimationSpeed;
                 break;
+            case State.Alert:
+            case State.Pursuit:
+                this.NavAgent.Resume();
+                this.NavAgent.speed = this.pursuitSpeed;
+                this.currentAnimationSpeed = this.pursuitAnimationSpeed;
+                break;
         } // switch
 
         this.EnemyState = state;
@@ -389,12 +464,34 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
+    /// Stores the player's last "seen" location and returns true
+    /// if the player is still within in the field of view
+    /// </summary>
+    /// <returns></returns>
+    protected bool IsPlayerInSight()
+    {
+        bool isVisible = this.FieldOfView.visibleTargets.Count > 0;
+        
+        if(isVisible) {
+            Transform target = this.FieldOfView.visibleTargets[0];
+            this.lastPlayerPosition = target.position;
+        }
+
+        return isVisible;
+    }
+
+    /// <summary>
     /// Handles the Idle sequence
     /// If player is spotted while in Idle mode triggers Alert
     /// When idle time is over a transition to Patrol is triggered
     /// </summary>
     protected virtual void Idle()
     {
+        if(this.IsPlayerInSight()) {
+            this.TransitionToState(State.Alert);
+            return;
+        }
+
         this.idleCount++;
         if(this.idleCount >= this.maxIdleTime) {
             this.idleCount = 0;
@@ -414,6 +511,12 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
         // Navpoint is unknown - return to Idle
         if(this.navPoints == null || this.navPoints.Count < 1) {
             this.TransitionToState(State.Idle);
+            return;
+        }
+
+        // Player spotted
+        if(this.IsPlayerInSight()) {
+            this.TransitionToState(State.Alert);
             return;
         }
        
@@ -437,15 +540,73 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
-    /// Checks if the player is within the field of vision for this unit
-    /// Returns True when the unit has direct "sight" of the player
+    /// Handles the Alert sequence
+    /// While the player is in sight but too far to pursue the enemy will go to the player's last
+    /// known position. If the player is close enough a transition to pursue is triggered
+    /// If player's last position is reached and player is not in sight then a transition to
+    /// Scout is triggered
     /// </summary>
-    /// <returns></returns>
-    protected bool IsPlayerInSight()
+    protected virtual void Alert()
     {
-        bool inSight = false;
-        return inSight;
-    }    
+        if(this.IsPlayerInSight()) {
+            this.alertCounter = 0;
+            this.TransitionToState(State.Pursuit);
+            return;
+        }
+
+        // Keep moving towards the player's last position for a few seconds
+        this.NavAgent.SetDestination(this.lastPlayerPosition);
+
+        this.alertCounter++;
+        if(this.alertCounter < this.maxAlertDelay) {
+            return;
+        }
+
+        ////then transition to patrol if the player is not found
+        ////Reach the player's last known location before returning to patrol
+        //bool destinationReached = Vector3.Distance(this.navPoints[this.curNavIndex].position,
+        //                                           this.transform.position)
+        //                                           < 1f;
+
+        //if(!destinationReached) {
+        //    this.NavAgent.SetDestination(this.lastPlayerPosition);
+        //    return;
+        //}
+
+        this.alertCounter = 0;
+        // Find closest navigation point to set as the current destination
+        // Change to Idle
+        Transform previousNavPoint = this.navPoints[0];
+
+        foreach(Transform navPoint in this.navPoints) {
+            float prevDistance = Vector3.Distance(previousNavPoint.position,  this.transform.position);
+            float distance = Vector3.Distance(navPoint.position,  this.transform.position);
+
+            if(distance < prevDistance) {
+                previousNavPoint = navPoint;
+            }
+        }
+
+        this.curNavIndex = this.navPoints.IndexOf(previousNavPoint);
+        this.TransitionToState(State.Patrol);       
+    }
+
+    /// <summary>
+    /// Handles the Pursuit sequence
+    /// While the player remains visible the enemy runs towards the player's last
+    /// known visible position. 
+    /// If the player is within attacking range then a transition to Attack is triggered
+    /// If the enemy reaches the player's last known destination and the player remains
+    /// unseen for a given amount of time then a transition to Scout is triggered
+    /// </summary>
+    protected virtual void Pursuit()
+    {
+        if( this.IsPlayerInSight() ) { 
+            this.NavAgent.SetDestination(this.lastPlayerPosition);
+        } else {
+            this.TransitionToState(State.Alert);
+        }
+    }
 
     /// <summary>
     /// Handles the Scout sequence
@@ -479,51 +640,6 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
         if(this.scoutCount >= this.maxScoutTime) {
             this.scoutCount = 0;
             this.isScoutingADirection = false;
-        }
-    }
-
-    /// <summary>
-    /// Handles the Alert sequence
-    /// While the player is in sight but too far to pursue the enemy will go to the player's last
-    /// known position. If the player is close enough a transition to pursue is triggered
-    /// If player's last position is reached and player is not in sight then a transition to
-    /// Scout is triggered
-    /// </summary>
-    protected virtual void Alert()
-    {
-        bool playerSpotted = this.IsPlayerInSight();
-        this.NavAgent.SetDestination(this.lastPlayerPosition);
-        this.SetAnimatorTriggerByState(State.Alert);
-
-        // Player still in sight but too far away to pursue
-        if(playerSpotted && Vector3.Distance(this.lastPlayerPosition, this.transform.position) > 3f) {
-            this.lastPlayerPosition = this.Player.transform.position;
-
-        // Check if player is still in sight
-        } else if(playerSpotted){
-            this.TransitionToState(State.Pursuit);
-
-        // Destination Reached
-        } else if(Vector3.Distance(this.lastPlayerPosition, this.transform.position) < 1f) {
-            this.TransitionToState(State.Scout);
-        }
-    }
-
-    /// <summary>
-    /// Handles the Pursuit sequence
-    /// While the player remains visible the enemy runs towards the player's last
-    /// known visible position. 
-    /// If the player is within attacking range then a transition to Attack is triggered
-    /// If the enemy reaches the player's last known destination and the player remains
-    /// unseen for a given amount of time then a transition to Scout is triggered
-    /// </summary>
-    protected virtual void Pursuit()
-    {
-        bool playerSpotted = this.IsPlayerInSight();
-
-        if(playerSpotted) { 
-            this.SetAnimatorTriggerByState(State.Pursuit);
-            this.NavAgent.SetDestination(this.lastPlayerPosition);
         }
     }
     
