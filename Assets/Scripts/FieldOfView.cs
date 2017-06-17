@@ -38,11 +38,49 @@ public class FieldOfView : MonoBehaviour
     public float findTargetDelay = .25f;
 
     /// <summary>
+    /// Total rays to cast to create the field of view visual
+    /// </summary>
+    public float meshResolution;
+
+    /// <summary>
+    /// Total iterations to run while attempting to find the edge of an object obstracting the view
+    /// </summary>
+    public int edgeResolveIteration;
+
+    /// <summary>
+    /// When comparing if two rays are hitting the same object, this treshold defines the distance
+    /// at which we will consider them to be two distinct surfaces or objects
+    /// </summary>
+    public float edgeDistanceTreshold;
+
+    /// <summary>
+    /// Contains the view mesh
+    /// </summary>
+    public MeshFilter viewMeshFilter;
+
+    /// <summary>
+    /// The mesh that represents the view
+    /// </summary>
+    public Mesh viewMesh;
+
+    /// <summary>
     /// Triggers the visible target finder
     /// </summary>
     void Start()
     {
+        this.viewMesh = new Mesh();
+        this.viewMesh.name = "ViewMesh";
+        this.viewMeshFilter.mesh = this.viewMesh;
+
         StartCoroutine("FindTargetsWithDelay", this.findTargetDelay);
+    }
+
+    /// <summary>
+    /// Draws the field of view
+    /// </summary>
+    void LateUpdate()
+    {
+        this.DrawFieldOfView();
     }
 
     /// <summary>
@@ -105,5 +143,161 @@ public class FieldOfView : MonoBehaviour
             0f, 
             Mathf.Cos(angleInDregrees * Mathf.Deg2Rad)
         );
+    }
+
+    /// <summary>
+    /// Casts rays in the shape of the view radious and angle
+    /// Starting from the left most angle all the way to the right most angle
+    /// Generates a mesh between these rays to create a visual representation of the field of vision
+    /// </summary>
+    void DrawFieldOfView()
+    {
+        int stepCount = Mathf.RoundToInt(this.viewAngle * this.meshResolution);
+        float stepAngleSize = this.viewAngle / stepCount;
+        List<Vector3> viewPoints = new List<Vector3>();
+        ViewCastInfo previousViewCastInfo = new ViewCastInfo();
+
+        for(int i = 0; i < stepCount; i++) {
+            float angle = this.transform.eulerAngles.y - this.viewAngle / 2 + stepAngleSize * i;
+            ViewCastInfo viewCastInfo = this.ViewCast(angle);
+
+            // Checking if between the previous and current iteration
+            // there's been a hit and miss scenario so that we can find
+            // the edge of the obstacle encountered
+            if(i > 0) {
+                bool edgeDistanceTresholdExceeded = Mathf.Abs(previousViewCastInfo.distance - viewCastInfo.distance) > this.edgeDistanceTreshold;
+                bool findEdge = previousViewCastInfo.hit && viewCastInfo.hit && edgeDistanceTresholdExceeded;
+
+                if(previousViewCastInfo.hit != viewCastInfo.hit || findEdge) {
+                    EdgeInfo edge = this.FindEdge(previousViewCastInfo, viewCastInfo);
+                    if(edge.pointA != Vector3.zero){
+                        viewPoints.Add(edge.pointA);
+                    }
+                    if(edge.pointB != Vector3.zero){
+                        viewPoints.Add(edge.pointB);
+                    }
+                }
+            }
+
+            viewPoints.Add(viewCastInfo.point);
+            previousViewCastInfo = viewCastInfo;
+        }
+
+        int vertexCount = viewPoints.Count + 1;
+        Vector3[] vertices = new Vector3[vertexCount];
+        int[] triangles = new int[(vertexCount - 2) * 3];
+
+        // Origin
+        vertices[0] = Vector3.zero;
+
+        // Generate the remaining (triangle points) a.k.a "vertices
+        for(int i = 0; i < vertexCount - 1; i++) {
+            vertices[i + 1] = this.transform.InverseTransformPoint(viewPoints[i]);
+
+            if( i < vertexCount - 2) {
+                // Each triangle starts at "origin:
+                triangles[i * 3] = 0;
+                triangles[i * 3 + 1] = i + 1;
+                triangles[i * 3 + 2] = i + 2;
+            }            
+        } // for
+
+        // Re-draw the mesh
+        this.viewMesh.Clear();
+        this.viewMesh.vertices = vertices;
+        this.viewMesh.triangles = triangles;
+        this.viewMesh.RecalculateNormals();
+    }
+
+    /// <summary>
+    /// Performs a raycast from the center of the unit in the angle given up to the view radius
+    /// Collects data when collision with the obstacle layer happens or not
+    /// Returns information about the raycast made such as distance covered and wether collision occurred or not
+    /// </summary>
+    /// <param name="globalAngle"></param>
+    /// <returns></returns>
+    ViewCastInfo ViewCast(float globalAngle)
+    {
+        RaycastHit hit;
+        Vector3 direction = this.DirectionFromAngle(globalAngle, true);
+        bool isObstructed = Physics.Raycast(this.transform.position,
+                                            direction, 
+                                            out hit,
+                                            this.viewRadius, 
+                                            this.obstacleMask);
+        if(isObstructed) {
+            return new ViewCastInfo(true, hit.point, hit.distance, globalAngle);
+        }
+        
+        return new ViewCastInfo(false, this.transform.position + direction * this.viewRadius, this.viewRadius, globalAngle);
+    }
+
+    /// <summary>
+    /// Iterates through the <see cref="edgeResolveIteration"/> attempting to locate
+    /// the edge of an object obstructing the view
+    /// </summary>
+    /// <param name="minViewCast"></param>
+    /// <param name="maxViewCast"></param>
+    /// <returns></returns>
+    EdgeInfo FindEdge(ViewCastInfo minViewCast, ViewCastInfo maxViewCast)
+    {
+        float minAngle = minViewCast.angle;
+        float maxAngle = maxViewCast.angle;
+        Vector3 minPoint = Vector3.zero;
+        Vector3 maxPoint = Vector3.zero;
+
+        // Create raycasts updated the min and maximum each time a hit or miss is found
+        for(int i = 0; i < this.edgeResolveIteration; i++) {
+            float angle = (minAngle + maxAngle) / 2;
+            ViewCastInfo newViewCastInfo = this.ViewCast(angle);
+
+            bool edgeDistanceTresholdExceeded = Mathf.Abs(minViewCast.distance - maxViewCast.distance) > this.edgeDistanceTreshold;
+
+            if(newViewCastInfo.hit == minViewCast.hit && !edgeDistanceTresholdExceeded) {
+                minAngle = angle;
+                minPoint = newViewCastInfo.point;
+            } else {
+                maxAngle = angle;
+                maxPoint = newViewCastInfo.point;
+            }
+        } // for
+
+        return new EdgeInfo(minPoint, maxPoint);
+    }
+
+    /// <summary>
+    /// Container for the all the information for when we raycast to generate the field of view
+    /// </summary>
+    public struct ViewCastInfo
+    {
+        public bool hit;
+        public Vector3 point;
+        public float distance;
+        public float angle;
+
+        public ViewCastInfo(bool hit, Vector3 point, float distance, float angle)
+        {
+            this.hit = hit;
+            this.point = point;
+            this.distance = distance;
+            this.angle = angle;
+        }
+    }
+
+    /// <summary>
+    /// Contains the two points that help define where the edge of an object exists 
+    /// This is so that we can draw an extra ray btween the ray that hit an objects last
+    /// and the ray that missed the obstacle after this one
+    /// </summary>
+    public struct EdgeInfo
+    {
+        public Vector3 pointA;
+        public Vector3 pointB;
+
+        public EdgeInfo(Vector3 pointA, Vector3 pointB)
+        {
+            this.pointA = pointA;
+            this.pointB = pointB;
+        }
     }
 }
