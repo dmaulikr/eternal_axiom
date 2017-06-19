@@ -43,14 +43,20 @@ public class DungeonController : BaseController
     /// Prevents the coroutine from triggering multiple battle starts
     /// </summary>
     bool isBattleStarted = false;
-    
+
+    /// <summary>
+    /// How long to delay the transition into battle
+    /// </summary>
+    [SerializeField]
+    float battleStartDelay = 0.5f;
+
 
     /// <summary>
     /// Forces the screen to be black while assests are loaded
     /// Loads dungeon's configurations based on GameManager's instructions
     /// Spawns the DungeonUI Canvas and transitions in
     /// </summary>
-	void Awake()
+    void Awake()
     {
         int level = GameManager.Instance.level;        
         UIController.Instance.SetUIStatus(UIDetails.Name.Dungeon, true);
@@ -90,9 +96,9 @@ public class DungeonController : BaseController
     /// <param name="enemy">The enemy encountered</param>
     public void BattleEncounter(BaseDungeonEnemy enemy, BaseDungeonEnemy.EncounterType type)
     {
-        enemy.enabled = false;
         this.encounteredEnemy = enemy;
         this.Player.EnemyEncountered();
+
         // Call is delayed to allow animations to play for a bit before transitioning
         if(!this.isBattleStarted) {
             this.isBattleStarted = true;
@@ -105,7 +111,7 @@ public class DungeonController : BaseController
     /// </summary>
     IEnumerator StartBattle(GameObject enemyPrefab, BaseDungeonEnemy.EncounterType encounterType)
     {
-        yield return new WaitForSeconds(.5f);
+        yield return new WaitForSeconds(this.battleStartDelay);
         this.Player.enabled = false;
         this.battleController.Init(enemyPrefab, encounterType);
     } // StartBattle

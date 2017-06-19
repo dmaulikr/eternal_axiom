@@ -3,6 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+/// <summary>
+/// Controls the player's action when in dungeon exploration mode
+/// </summary>
 public class PlayerDungeon : MonoBehaviour, ICollideable
 {
     /// <summary>
@@ -125,6 +128,10 @@ public class PlayerDungeon : MonoBehaviour, ICollideable
             return;
         }
 
+        // Mouse-triggered attack
+        if( Input.GetButtonDown("Fire1") ) {
+            this.Attack();
+        }
         this.MovementVector = this.GetMovementVector();
 
         // Rotate to face the desired direction
@@ -156,8 +163,11 @@ public class PlayerDungeon : MonoBehaviour, ICollideable
             return;
         }
 
-        this.isAttacking = true;
-        this.Animator.SetTrigger("Attack");
+        
+        if( !this.isAttacking ) {
+            this.isAttacking = true;
+            this.Animator.SetTrigger("Attack");
+        }        
     } // Attack
 
     /// <summary>

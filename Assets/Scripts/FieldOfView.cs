@@ -74,11 +74,21 @@ public class FieldOfView : MonoBehaviour
     Color meshColor;
     public Color MeshColor
     {
+        get
+        {
+            return this.meshColor;
+        }
         set
         {
             this.meshColor = value;
         }
     }
+
+    /// <summary>
+    /// True: draw the field of view
+    /// False: hide the field of view
+    /// </summary>
+    public bool drawField = true;
 
     /// <summary>
     /// Creates the mesh to render
@@ -100,7 +110,11 @@ public class FieldOfView : MonoBehaviour
     /// </summary>
     void LateUpdate()
     {
-        this.DrawFieldOfView();
+        if(this.drawField) {
+            this.DrawFieldOfView();
+        } else {
+            this.viewMesh.Clear();
+        }        
     }
 
     /// <summary>

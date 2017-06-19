@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.AI;
-using System.Linq;
 
 /// <summary>
 /// Base class for all dungeon enemies to define common interactions
@@ -19,7 +17,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// </summary>
     public enum EncounterType
     {
-        Normal,         // Both collided with neither attacking the other
+        Normal,         // Enemy and player collided
         Ambushed,       // Enemy attacked the Player first
         PreEmptive,     // Player Attack the Enemy first
     } // EncounterType
@@ -50,7 +48,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // Controller
 
     /// <summary>
-    /// Holds a reference to the player script for the avatar in the dungeon
+    /// Holds a reference to the player
     /// </summary>
     PlayerDungeon player;
     public PlayerDungeon Player
@@ -65,7 +63,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // Player
 
     /// <summary>
-    /// Returns the animator component
+    /// A reference to the animator controller
     /// </summary>
     Animator animator;
     public Animator Animator
@@ -109,23 +107,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
-    /// True when the attack animation is still within "hit frames"
-    /// </summary>
-    public bool isAttacking = false;
-
-    /// <summary>
-    /// True when the enemy lost the battle
-    /// </summary>
-    [SerializeField]
-    bool isDead = false;
-
-    /// <summary>
-    /// Don't repeat the death trigger
-    /// </summary>
-    bool dontRepeat = false;
-
-    /// <summary>
-    /// The states the unit can be
+    /// The states the enemy can be in
     /// </summary>
     public enum State
     {
@@ -134,7 +116,6 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
         Patrol,
         Alert,
         Pursuit,
-        Scout,
         Hurt,
         Attack,
         Encounter,
@@ -147,7 +128,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     private MethodInfo currentStateMethod = null;
 
     /// <summary>
-    /// Current unit state
+    /// Current state
     /// </summary>
     [SerializeField]
     private State state;
@@ -162,9 +143,8 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
         {
             Type type = this.GetType();
 
-            // States will typically be "private" methods but we want to add 
-            // the flexibility of having public methods too
-            // Finally, we must provide "Instance" to invoke private methods
+            // Locates the name of the method based on the name of the state given
+            // Includes public and private methods
             MethodInfo method = type.GetMethod( 
                 value.ToString(), 
                 BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public
@@ -179,19 +159,9 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // EnemyState
 
     /// <summary>
-    /// Animation tags for the matching state
+    /// A collection of animator parameters associated with a state
     /// </summary>
-    protected Dictionary<State, string> animationTags = new Dictionary<State, string> {
-        { State.Idle, "Idle" },
-        { State.Attack, "Attack" },
-        { State.Hurt, "Hurt" },
-        { State.Death, "Death" },
-    };
-
-    /// <summary>
-    /// A collection of hash animator triggers based on the state
-    /// </summary>
-    protected Dictionary<State, int> hashAnimTriggers = new Dictionary<State, int> {
+    protected Dictionary<State, int> hashAnimatorParams = new Dictionary<State, int> {
         { State.Attack, Animator.StringToHash("Attack")},
         { State.Hurt, Animator.StringToHash("Hurt")},
         { State.Death, Animator.StringToHash("Death")},
@@ -203,7 +173,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     protected readonly int hashSpeedParam = Animator.StringToHash("Speed");
 
     /// <summary>
-    /// How many ticks the unit has been in idle
+    /// How many ticks this enemy has been in idle
     /// </summary>
     protected int idleCount = 0;
 
@@ -217,21 +187,22 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// A list of all the navigation points an enemy can move to
     /// </summary>
     [SerializeField]
-    protected List<Transform> navPoints;
+    protected List<Transform> navigationPoints;
 
     /// <summary>
-    /// The current navigation point being moved to
+    /// The current navigation point index from <see cref="navigationPoints"/>
     /// </summary>
-    protected int curNavIndex = 0;
+    protected int curNavPointIndex = 0;
 
     /// <summary>
-    /// How far to the destination before it is considered as "arrived"
+    /// How close to the destination navigation point befoer we considered it as "arrived"
     /// </summary>
     [SerializeField]
-    protected float distancePad = 0.3f;
+    float navDestinationPad = 0.3f;
 
     /// <summary>
-    /// How to transition into the next speed
+    /// How slowly or quickly to update the animator speed float parameter
+    /// This is used to slowly change the mecanim rather than snapping in to
     /// </summary>
     [SerializeField]
     protected float speedDamp = 0.1f;
@@ -244,106 +215,89 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     protected float rotationSpeed = 15f;
 
     /// <summary>
-    /// Prevents multiple triggers of the coroutine to change current nav point index
-    /// </summary>
-    protected bool isChangeLocationTriggered = false;
-
-    /// <summary>
-    /// How long in seconds the unit waits before changing to the next nav point
-    /// </summary>
-    protected float patrolDelayTime = 2f;
-
-    /// <summary>
-    /// The target this unit will pursuit when in "alert" mode
+    /// The playerTransform this enemy will pursuit when in "alert/pursuit" mode
     /// </summary>
     [SerializeField]
     protected GameObject targetGO;
-
+    
     /// <summary>
-    /// A list of directions in degrees for the unit to scout
-    /// flags indicate whether the unit has scouted that direction or not
+    /// Last position the playerTransform (a.k.a player) was sighted at
     /// </summary>
-    Dictionary<float, bool> scoutedDirections = new Dictionary<float, bool>() {
-        {0f, false},
-        {90f, false},
-        {180f, false},
-        {360f, false},
-    };
+    private Vector3 lastKnownPlayerPosition;
 
     /// <summary>
-    /// Increased on each tick the unit is scouting a specific location
-    /// </summary>
-    int scoutCount = 0;
-
-    /// <summary>
-    /// Total time the unit faces a scouted direction in millisecons
-    /// </summary>
-    int maxScoutTime = 2000;
-    private bool isScoutingADirection;
-    private Vector3 lastPlayerPosition;
-
-    /// <summary>
-    /// How fast the unit moves while patrolling
+    /// How fast this enemy moves while patrolling
     /// </summary>
     [SerializeField]
     protected float patrolSpeed = 1.5f;
 
     /// <summary>
-    /// The mechanim speed that represents the unit patrolling
+    /// The mecanim speed that represents this enemy patrolling
     /// </summary>
     [SerializeField] 
     protected float patrolAnimationSpeed = 0.5f;
 
     /// <summary>
-    /// How fast the unit moves when pursuing its target
+    /// How fast this enemy moves when pursuing its playerTransform
     /// </summary>
     [SerializeField]
     protected float pursuitSpeed = 2.0f;
 
     /// <summary>
-    /// The mechanim speed that represents the unit pursuing
+    /// The mecanim speed that represents this enemy pursuing
     /// </summary>
     [SerializeField] 
     protected float pursuitAnimationSpeed = 1f;
 
     /// <summary>
-    /// The current speed to set the animation mechanim to 
+    /// The current speed to set the animation mecanim to 
     /// The purpouse being to slowly transition to this speed and not snap into it
     /// </summary>
     private float currentAnimationSpeed = 0f;
 
     /// <summary>
-    /// Field of View Color for when the unit is not aware of the player's location
+    /// Field of View Color for when this enemy is not aware of the player's location
     /// </summary>
     [SerializeField]
     Color normalFOWColor = Color.blue;
 
     /// <summary>
-    /// Field of View Color for when the unit is scouting for the player
+    /// Field of View Color for when this enemy is on alert
     /// </summary>
     [SerializeField]
     Color alertFOWColor = Color.yellow;
 
     /// <summary>
-    /// Field of View Color for when the unit is actively pursuing the player
+    /// Field of View Color for when this enemy is actively pursuing the player
     /// </summary>
     [SerializeField]
     Color pursuitFOWColor = Color.red;
 
     /// <summary>
-    /// Keeps tracks of how many ticks the unit has been in alert mode
-    /// </summary>
-    [SerializeField]
-    protected int alertCounter = 0;
+    /// Keeps tracks of how many ticks this enemy has been in alert mode
+    /// </summary>    
+    int alertCounter = 0;
 
     /// <summary>
-    /// Maximum clicks the unit will spend in alert mode
+    /// Maximum clicks this enemy will spend in alert mode
     /// </summary>
-    protected int maxAlertDelay = 100;
+    [SerializeField]
+    protected int maxAlertDelay = 125;
 
+    /// <summary>
+    /// True when this enemy's attack connected with the player's avatar
+    /// </summary>
+    protected bool isPlayerHurt = false;
+
+    /// <summary>
+    /// How close this enemy needs to be from the player to trigger an attack
+    /// </summary>
+    [SerializeField]
+    protected float attackDistance = 1F;
 
     /// <summary>
     /// Initialize
+    /// States in Idle and finds its playerTransform (a.k.a, the player)
     /// </summary>
     void Awake()
     {
@@ -356,10 +310,6 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     /// </summary>
     void Update()
     {
-        //if(this.isDead && !dontRepeat) {
-        //    dontRepeat = true;
-        //    this.Defeated();
-        //}
         if(this.currentStateMethod != null) {
             this.currentStateMethod.Invoke(this, null);
         }
@@ -377,7 +327,8 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
-    /// Updates the units animation speed to simulate movement
+    /// Updates this enemy's animation speed to simulate movement
+    /// Speed is damped for smooth transitions
     /// </summary>
     void Move()
     {
@@ -385,7 +336,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
                                 this.currentAnimationSpeed, 
                                 this.speedDamp, 
                                 Time.deltaTime);
-    } // Move
+    }
 
     /// <summary>
     /// Rotates the gameobject to match the navagent's desired velocity
@@ -401,7 +352,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
         this.transform.rotation = Quaternion.Lerp(this.transform.rotation,
                                                   targetRotation,
                                                   this.rotationSpeed * Time.deltaTime);
-    } // Rotate
+    }
 
     /// <summary>
     /// Sets the color of the field of view based on the current state
@@ -410,12 +361,19 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     {
         switch(this.state) {
             case State.Alert:
-            case State.Scout:
                 this.FieldOfView.MeshColor = this.alertFOWColor;
                 break;
+
             case State.Pursuit:
                 this.FieldOfView.MeshColor = this.pursuitFOWColor;
                 break;
+
+            case State.Attack:
+            case State.Encounter:
+            case State.Death:
+                // Leave it the color it currently is
+                break;
+
             default:
                 this.FieldOfView.MeshColor = this.normalFOWColor;
                 break;
@@ -424,28 +382,51 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
 
     /// <summary>
     /// Handles transitioning from state to state
-    /// Sets the unit's movement/animation speed
+    /// Sets this enemy's movement/animation speed
     /// Handles variable updates and cleanup
     /// </summary>
     /// <param name="state"></param>
     protected virtual void TransitionToState(State state)
     {
+        // Ensures the FOW is enabled
+        this.FieldOfView.drawField = true;
+
         switch(state) {
             case State.Idle:
+            case State.Wait:
                 this.NavAgent.Stop();
                 this.NavAgent.speed = 0f;
                 this.currentAnimationSpeed = 0f;
                 break;
+
             case State.Patrol:
                 this.NavAgent.Resume();
                 this.NavAgent.speed = this.patrolSpeed;
                 this.currentAnimationSpeed = this.patrolAnimationSpeed;
                 break;
+
             case State.Alert:
             case State.Pursuit:
                 this.NavAgent.Resume();
                 this.NavAgent.speed = this.pursuitSpeed;
                 this.currentAnimationSpeed = this.pursuitAnimationSpeed;
+                break;
+
+            case State.Attack:
+                this.NavAgent.Stop();
+                this.NavAgent.speed = 0f;
+                this.NavAgent.velocity = Vector3.zero;
+                this.currentAnimationSpeed = 0f;
+                this.SetAnimatorTriggerByState(State.Attack);
+                this.FieldOfView.drawField = false;
+                break;
+
+            case State.Encounter:
+            case State.Death:
+                this.NavAgent.Stop();
+                this.NavAgent.speed = 0f;
+                this.currentAnimationSpeed = 0f;
+                this.FieldOfView.drawField = false;
                 break;
         } // switch
 
@@ -453,37 +434,39 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
-    /// Tr
+    /// Triggers the Animator's trigger parameter for the given state as long
+    /// as the animation being played is not already the desired one to avoid 
+    /// setting the trigger multiple times
     /// </summary>
     /// <param name="state"></param>
     protected void SetAnimatorTriggerByState(State state)
     {
-        if( this.animator.GetCurrentAnimatorStateInfo(0).tagHash != this.hashAnimTriggers[state] ) {
-            this.animator.SetTrigger(this.hashAnimTriggers[state]);
+        if( this.Animator.GetCurrentAnimatorStateInfo(0).tagHash != this.hashAnimatorParams[state] ) {
+            this.Animator.SetTrigger(this.hashAnimatorParams[state]);
         }
     }
 
     /// <summary>
     /// Stores the player's last "seen" location and returns true
-    /// if the player is still within in the field of view
+    /// if the player is still within the field of view
     /// </summary>
-    /// <returns></returns>
+    /// <returns>True: player is in the FOW</returns>
     protected bool IsPlayerInSight()
     {
         bool isVisible = this.FieldOfView.visibleTargets.Count > 0;
         
         if(isVisible) {
-            Transform target = this.FieldOfView.visibleTargets[0];
-            this.lastPlayerPosition = target.position;
+            Transform playerTransform = this.FieldOfView.visibleTargets[0];
+            this.lastKnownPlayerPosition = playerTransform.position;
         }
 
         return isVisible;
     }
 
     /// <summary>
-    /// Handles the Idle sequence
-    /// If player is spotted while in Idle mode triggers Alert
-    /// When idle time is over a transition to Patrol is triggered
+    /// Waits in Idle for a given Time
+    /// Transitions to Patrol when the time expires
+    /// Transitions to Alert when the player is in sight
     /// </summary>
     protected virtual void Idle()
     {
@@ -500,19 +483,21 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
-    /// Handles the Patrol sequence
-    /// While the unit has not reach the current patrol point the unit moves to it
-    /// When the point is reached, the navigation points moves to the next available point
-    /// and a transition to Idle is triggered
-    /// If the player is spotted it triggers a transition to engage the player
+    /// Continues to moves towards the current <see cref="curNavPointIndex"/>
+    /// Transitions to Idle when the destination is reached or unknown
+    /// Transitions to Alert when the player is sighted
     /// </summary>
     protected virtual void Patrol()
     {
-        // Navpoint is unknown - return to Idle
-        if(this.navPoints == null || this.navPoints.Count < 1) {
+        // Navpoint is unknown, return to Idle
+        if(this.navigationPoints == null || this.navigationPoints.Count < 1) {
             this.TransitionToState(State.Idle);
+            Debug.Log("Enemy: " + this.name + " does not have valid navigation points");
             return;
         }
+
+        // Keep moving towards destination
+        this.NavAgent.SetDestination(this.navigationPoints[this.curNavPointIndex].position);
 
         // Player spotted
         if(this.IsPlayerInSight()) {
@@ -520,31 +505,26 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
             return;
         }
        
-        bool destinationReached = Vector3.Distance(this.navPoints[this.curNavIndex].position, 
+        bool destinationReached = Vector3.Distance(this.navigationPoints[this.curNavPointIndex].position, 
                                                    this.transform.position) 
-                                                   < this.distancePad;
+                                                   < this.navDestinationPad;
         // Destination Reached
         if(destinationReached) {
-            this.curNavIndex++;
+            this.curNavPointIndex++;
 
-            if(this.curNavIndex >= this.navPoints.Count) {
-                this.curNavIndex = 0;
+            if(this.curNavPointIndex >= this.navigationPoints.Count) {
+                this.curNavPointIndex = 0;
             }
 
             this.TransitionToState(State.Idle);
-
-        // Resume/Continue moving
-        } else {
-            this.NavAgent.SetDestination(this.navPoints[this.curNavIndex].position);
         }
     }
 
     /// <summary>
-    /// Handles the Alert sequence
-    /// While the player is in sight but too far to pursue the enemy will go to the player's last
-    /// known position. If the player is close enough a transition to pursue is triggered
-    /// If player's last position is reached and player is not in sight then a transition to
-    /// Scout is triggered
+    /// Continues to move towards the player's last known location 
+    /// Transitions to Patrol if the alert time expires
+    /// Transitions to Pursuit if the player is sighted
+    /// Chooses the closest navigation point when returning to patrol
     /// </summary>
     protected virtual void Alert()
     {
@@ -554,31 +534,101 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
             return;
         }
 
-        // Keep moving towards the player's last position for a few seconds
-        this.NavAgent.SetDestination(this.lastPlayerPosition);
+        // Keep moving towards the player's last position 
+        this.NavAgent.SetDestination(this.lastKnownPlayerPosition);
 
+        // Time's not up
         this.alertCounter++;
         if(this.alertCounter < this.maxAlertDelay) {
             return;
         }
 
-        ////then transition to patrol if the player is not found
-        ////Reach the player's last known location before returning to patrol
-        //bool destinationReached = Vector3.Distance(this.navPoints[this.curNavIndex].position,
-        //                                           this.transform.position)
-        //                                           < 1f;
-
-        //if(!destinationReached) {
-        //    this.NavAgent.SetDestination(this.lastPlayerPosition);
-        //    return;
-        //}
-
         this.alertCounter = 0;
-        // Find closest navigation point to set as the current destination
-        // Change to Idle
-        Transform previousNavPoint = this.navPoints[0];
+        this.curNavPointIndex = this.GetClosestNavPointIndex();        
+        this.TransitionToState(State.Patrol);
+    }
 
-        foreach(Transform navPoint in this.navPoints) {
+    /// <summary>
+    /// Continues to move towards the player's last known position while the player is in sight
+    /// Transitions to Attack if the player is close enough
+    /// Transitions to Alert if the player is no longer in sight
+    /// </summary>
+    protected virtual void Pursuit()
+    {
+        if(!this.IsPlayerInSight()) {
+            this.TransitionToState(State.Alert);
+            return;
+        }
+
+        // Continue to pursue
+        this.NavAgent.SetDestination(this.lastKnownPlayerPosition);
+
+        // Close enough to attack
+        float distanceToPlayer = Vector3.Distance(this.lastKnownPlayerPosition, this.transform.position);
+        if(distanceToPlayer <= this.attackDistance) {
+            this.TransitionToState(State.Attack);
+        }
+    }
+
+    /// <summary>
+    /// Waits until the attack animation has finished
+    /// Transitions to Encounter if the attack connects with the player
+    /// Transitions to Pursuit once the animation is completed
+    /// </summary>
+    protected virtual void Attack()
+    {
+        // Attack connected
+        if(this.isPlayerHurt) {
+            this.encounterType = EncounterType.Ambushed;
+            this.TransitionToState(State.Encounter);
+            return;
+        }
+        
+        // Wait for animation to complete
+        if(this.Animator.GetCurrentAnimatorStateInfo(0).tagHash == this.hashAnimatorParams[this.state]) {
+            return;
+        }
+
+        // Resume pursuing the player
+        this.TransitionToState(State.Pursuit);
+    }
+
+    /// <summary>
+    /// Notifies the dungeon <see cref="Controller"/> to initiate a battle encounter
+    /// based on what <see cref="encounterType"/> is set to
+    /// Transitions to Wait
+    /// </summary>
+    protected virtual void Encounter()
+    {
+        this.Controller.BattleEncounter(this, this.encounterType);
+        this.TransitionToState(State.Wait);
+    }
+
+    /// <summary>
+    /// Place holder while the death sequence plays
+    /// </summary>
+    protected virtual void Death(){}
+
+    /// <summary>
+    /// A place holder for when the unit is waiting for another sequence to complete
+    /// before transitionin to another
+    /// Field of view is disabled during the wait
+    /// </summary>
+    protected virtual void Wait()
+    {
+        this.FieldOfView.drawField = false;
+    }
+
+    /// <summary>
+    /// Finds the closest navigation point
+    /// Returns the index of said navigation point from the <see cref="this.navPoints"/> list
+    /// </summary>
+    /// <returns></returns>
+    protected int GetClosestNavPointIndex()
+    {
+        Transform previousNavPoint = this.navigationPoints[0];
+
+        foreach(Transform navPoint in this.navigationPoints) {
             float prevDistance = Vector3.Distance(previousNavPoint.position,  this.transform.position);
             float distance = Vector3.Distance(navPoint.position,  this.transform.position);
 
@@ -587,154 +637,30 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
             }
         }
 
-        this.curNavIndex = this.navPoints.IndexOf(previousNavPoint);
-        this.TransitionToState(State.Patrol);       
+        return this.navigationPoints.IndexOf(previousNavPoint);
     }
 
     /// <summary>
-    /// Handles the Pursuit sequence
-    /// While the player remains visible the enemy runs towards the player's last
-    /// known visible position. 
-    /// If the player is within attacking range then a transition to Attack is triggered
-    /// If the enemy reaches the player's last known destination and the player remains
-    /// unseen for a given amount of time then a transition to Scout is triggered
-    /// </summary>
-    protected virtual void Pursuit()
-    {
-        if( this.IsPlayerInSight() ) { 
-            this.NavAgent.SetDestination(this.lastPlayerPosition);
-        } else {
-            this.TransitionToState(State.Alert);
-        }
-    }
-
-    /// <summary>
-    /// Handles the Scout sequence
-    /// During Scout mode, the enemy looks around to try and spot the player
-    /// When the player is spotted it triggers a transition to engage the player
-    /// If the player remains unspotted for a given time the enemy transitions to Patrol
-    /// </summary>
-    protected virtual void Scout()
-    {
-        if(!this.isScoutingADirection) {
-            this.isScoutingADirection = true;
-
-            bool isScoutDone = this.scoutedDirections.Values.Distinct().Count() == 1;
-            
-            if(isScoutDone) {
-                this.TransitionToState(State.Patrol);
-                return;
-            } else {
-                float curRotation = this.scoutedDirections.First(pair => pair.Value == false).Key;
-                this.scoutedDirections[curRotation] = true;
-                this.transform.rotation = Quaternion.Euler(new Vector3(0f, curRotation, 0f));
-            }           
-        }        
-
-        if(this.IsPlayerInSight()) {
-            this.TransitionToState(State.Alert);
-            return;
-        }
-
-        this.scoutCount++;
-        if(this.scoutCount >= this.maxScoutTime) {
-            this.scoutCount = 0;
-            this.isScoutingADirection = false;
-        }
-    }
-    
-    /// <summary>
-    /// Handles the Attack sequence
-    /// Triggers the attack animation (once)
-    /// Rotates to face the player while the player is still visible
-    /// Waits for the animation to complete 
-    /// If the player is hit then a transition to Encounter is triggered
-    /// If the animation is completed, the player is still seen, and the attack
-    /// did not connected then a transition to Pursuit is tiggered
-    /// </summary>
-    protected virtual void Attack()
-    {
-
-    }
-
-    /// <summary>
-    /// Handles the Hurt sequence
-    /// This occurs when the player attack connects with the enemy
-    /// </summary>
-    protected virtual void Hurt()
-    {
-
-    }
-
-    /// <summary>
-    /// Handles the Encounter sequence
-    /// Encounters may occur when:
-    ///     - Enemy attack connects with the player (ambushed)
-    ///     - Player attack connects with enemy (pre-emptive)
-    ///     - Collision with player (normal)
-    /// </summary>
-    protected virtual void Encounter()
-    {
-
-    }
-
-    /// <summary>
-    /// Handles the Death sequence
-    /// Triggers the Death animation
-    /// Disables physics and collider
-    /// Waits for the animation to complete
-    /// </summary>
-    protected virtual void Death()
-    {
-
-    }
-
-    /// <summary>
-    /// Handles the Wait sequence
-    /// A wait sequence is used to prevent the unit from triggering
-    /// another action while waiting for a previous one to complete
-    /// More or less a place holder to halt all other actions
-    /// </summary>
-    protected virtual void Wait(){}
-
-    /// <summary>
-    /// Triggers the enemy's hurt animation
+    /// Triggers the hurt animation
     /// </summary>
     public void TriggerHurt()
     {
-        this.Animator.SetTrigger("Hurt");
-    } // TriggerHurt
-    
-    /// <summary>
-    /// Triggers the enemy's attack animation
-    /// </summary>
-    public void TriggerAttack()
-    {
-        this.Animator.SetTrigger("Attack");
-    } // TriggerHurt
+        this.SetAnimatorTriggerByState(State.Hurt);
+    }
 
     /// <summary>
-    /// Player successfully connected an attack with this enemy before the enemy could
-    /// and before there was a collision between the two
+    /// Player attacked the enemy and the attack connected
     /// </summary>
     public void PlayerAttackConnected()
     {
         this.TriggerHurt();
-        this.Controller.BattleEncounter(this, EncounterType.PreEmptive);
-    } // PlayerAttackConnected
-    
-    /// <summary>
-    /// Enemy attacked the player before the player could attack or collide with it
-    /// </summary>
-    public void AmbushedAttack()
-    {
-        this.Player.TriggerHurt();
-        this.Controller.BattleEncounter(this, EncounterType.Ambushed);
-    } // AmbushedAttack
+        this.encounterType = EncounterType.PreEmptive;
+        this.TransitionToState(State.Encounter);
+    }
 
     /// <summary>
-    /// Triggered by the player when it enter into collision with any of the enemy's trigger collider
-    /// Based on which collider the collision occured with the proper action is apply
+    /// Triggered when there's a collision with the player
+    /// Collision could be from the enemy's attack or the player bumping into the enemy
     /// </summary>
     public void PlayerCollision(string colliderName)
     {
@@ -742,59 +668,44 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
             // Enemy's attack connected
             case "WeaponCollider":
                 this.Player.TriggerHurt();
-                this.Controller.BattleEncounter(this, EncounterType.Ambushed);
-                break;
-
-            // Enemy has spotted the player and will engage
-            case "EngageCollider":
-                this.TriggerAttack();
-                break;
-        
-            // Player Spotted
-            case "VisionCollider":
-                this.state = State.Alert;
+                this.isPlayerHurt = true;
                 break;
             
-            // Collision without attacking has happened
+            // Both enemy and player collided
+            // Initiate a normal battle encounter
             case "EncounterCollider":
-                // Player may have bumped the enemy while it was also attacking it
-                if(this.isAttacking) {
-                    return;
-                }
                 this.TriggerHurt();
                 this.Player.TriggerHurt();
-                this.Controller.BattleEncounter(this, EncounterType.Normal);
+                this.encounterType = EncounterType.Normal;
+                this.TransitionToState(State.Encounter);
                 break;
         } // switch
-    } // PlayerCollision
+    }
 
     /// <summary>
-    /// Plays death animation
+    /// Triggers the defeated animation 
+    /// Disables colliders to prevent collisions and triggers
+    /// Transitions to Death state
     /// </summary>
     public void Defeated()
     {
-        this.isDead = true;
-        this.Animator.SetTrigger("Death");
+        this.SetAnimatorTriggerByState(State.Death);
 
-        // Remove rigidbody to prevent further collision detection
-        // and to avoid falling through the floor after disabling the colliders
-        Destroy(GetComponent<Rigidbody>());
+        // Disable collisions to allow the player to go through
+        GetComponent<Rigidbody>().detectCollisions = false;
 
         // Disable all colliders to prevent any triggers
         foreach(Collider collider in GetComponentsInChildren<Collider>()) {
             collider.enabled = false;
         }
-    } // Defeated
+
+        this.TransitionToState(State.Death);
+    }
 
     /// <summary>
     /// Called at the end of specific animations 
     /// </summary>
-    public void AnimationEnd()
-    {
-        if(this.isAttacking) {
-            this.isAttacking = false;
-        }        
-    }
+    public void AnimationEnd(){}
 
     /// <summary>
     /// Called when the death animation is over
@@ -816,5 +727,5 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
         if(other.gameObject == this.Player.gameObject) {
             this.PlayerCollision(colliderName);
         }
-    } // OnCollision
+    }
 } // class

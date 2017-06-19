@@ -6,12 +6,6 @@ using UnityEngine;
 /// </summary>
 public class CameraController : MonoBehaviour
 {
-	/// <summary>
-    /// The resource locations of all the cameras available to the dungeon
-    /// </summary>
-    [SerializeField]
-    string pathToCameras = "Dungeon/Cameras";
-
     /// <summary>
     /// Current active camera 
     /// </summary>
@@ -68,16 +62,7 @@ public class CameraController : MonoBehaviour
     public void LoadCameras()
     {
         // Always starts with the current "main" camera
-        this.visibleCamera = Camera.main;
-
-        //if(string.IsNullOrEmpty(this.pathToCameras)) {
-        //    throw new System.Exception("Missing path to dungeon cameras");
-        //}
-
-        //GameObject[] allCameras = Utility.LoadResources<GameObject>(this.pathToCameras);
-        //if(allCameras.GetLength(0) < 1) {
-        //    throw new System.Exception(string.Format("No cameras found under path [{0}]", this.pathToCameras));
-        //}
+        this.visibleCamera = Camera.main;       
 
         // Store the current one too
         CameraDetails.Name cameraName = this.visibleCamera.GetComponentInParent<CameraDetails>().cameraName;
