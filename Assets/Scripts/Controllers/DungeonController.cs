@@ -64,6 +64,28 @@ public class DungeonController : BaseController
     } // Awake
 
     /// <summary>
+    /// Triggers door to close/open
+    /// </summary>
+    void Start()
+    {
+        this.TriggerDoors();
+    }
+    
+    /// <summary>
+    /// When the player enters a room this method is called to trigger the doors to close
+    /// Doors are always "opened" by default so we will not change them unless the condition above is met
+    /// Only the doors that are currently "visible" will be triggered 
+    /// </summary>
+    public void TriggerDoors()
+    {
+        if(!this.VisibleEnemies()) {
+            this.OpenVisibleDoors();
+        } else {
+            this.CloseVisibleDoors();
+        }
+    }
+
+    /// <summary>
     /// Processes the action for the button pressed
     /// </summary>
     /// <param name="button"></param>
@@ -130,7 +152,65 @@ public class DungeonController : BaseController
         this.Player.enabled = true;
         this.Player.BattleSequenceCompleted();
         UIController.Instance.SwitchToUI(UIDetails.Name.Dungeon);
+
+        this.TriggerDoors();
     } // BattleEnd
+
+    /// <summary>
+    /// Returns True when there are no visible enemies
+    /// </summary>
+    /// <returns></returns>
+    bool VisibleEnemies()
+    {
+        List<BaseDungeonEnemy> visibleEnemies = new List<BaseDungeonEnemy>();
+
+        foreach(BaseDungeonEnemy enemy in FindObjectsOfType<BaseDungeonEnemy>()) {
+            if(this.isObjectVisible(enemy.transform)) {
+                visibleEnemies.Add(enemy);
+            }
+        }
+        
+        return visibleEnemies.Count > 0;
+    }
+
+    /// <summary>
+    /// Opens only the currently visible doors
+    /// </summary>
+    void OpenVisibleDoors()
+    {
+        foreach(DungeonDoor door in FindObjectsOfType<DungeonDoor>()) {
+            bool isVisible = this.isObjectVisible(door.transform);
+            if(isVisible) {
+                door.Open();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Closes only the currently visible doors
+    /// </summary>
+    void CloseVisibleDoors()
+    {
+        foreach(DungeonDoor door in FindObjectsOfType<DungeonDoor>()) {
+            bool isVisible = this.isObjectVisible(door.transform);
+            if(isVisible) {
+                door.Close();
+            }
+        }
+    }
+
+    /// <summary>
+    /// TRUE if the object can be seen by the camera
+    /// </summary>
+    /// <param name="transform"></param>
+    /// <returns></returns>
+    bool isObjectVisible(Transform transform)
+    {
+        Vector3 worldToView = CameraController.Instance.ActiveCamere.WorldToViewportPoint(transform.position);
+        bool withinBottomLeftCorner = worldToView.x >= 0 && worldToView.y >= 0;
+        bool withinUpperRightCorner = worldToView.x <= 1 && worldToView.y <= 1;
+        return withinBottomLeftCorner && withinUpperRightCorner && worldToView.z >= 0;
+    }
 
     /// <summary>
     /// Called when the player has lost to perform a "soft reset"

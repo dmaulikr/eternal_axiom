@@ -11,6 +11,7 @@ public class CameraController : MonoBehaviour
     /// </summary>
     [SerializeField]
     Camera visibleCamera;
+    public Camera ActiveCamere { get { return this.visibleCamera; } }
 
     /// <summary>
     /// Contains a list of all the UIGOs this controller manages

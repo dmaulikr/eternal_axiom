@@ -176,6 +176,13 @@ public class BattleController : BaseController
             this.MessageScreen = UIController.Instance.GetUIGameObject(UIDetails.Name.BattleMessage);
         }
 
+        this.selectedWords = new List<WordContainer>();
+
+        // Have to enable to UI to have access to it
+        UIController.Instance.SetUIStatus(UIDetails.Name.MainBattle, true);
+        this.ScriptureContainer.Init();
+        UIController.Instance.SetUIStatus(UIDetails.Name.MainBattle, false);
+
         GameObject playerGO = Instantiate(this.playerPrefab, this.transform, false);
         playerGO.transform.position = this.playerSpawnPoint.position;
         this.player = playerGO.GetComponent<BattleUnit>();
@@ -544,10 +551,22 @@ public class BattleController : BaseController
 
     /// <summary>
     /// Called when a unit has died to determine game over or game won
+    /// Perform cleanup of the UI to re-enable all disabled words
     /// </summary>
     /// <param name="unit"></param>
     internal void UnitDied(BattleUnit unit)
     {
+        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerAttack, true);
+
+        foreach(WordContainer word in FindObjectsOfType<WordContainer>()) {
+            if( !string.IsNullOrEmpty(word.GetComponentInChildren<Text>().text) ) {
+                word.GetComponent<Button>().interactable = true;
+            }
+        }
+
+        this.DeselectAllWords();
+        UIController.Instance.SetUIStatus(UIDetails.Name.PlayerAttack, false);
+
         if(unit == this.player) {
             this.Defeated();
         } else {

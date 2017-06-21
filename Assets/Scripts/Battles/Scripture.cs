@@ -11,6 +11,11 @@ using System;
 public class Scripture : MonoBehaviour
 {
     /// <summary>
+    /// Stores the original unultered verse text
+    /// </summary>
+    string originalVerse;
+
+    /// <summary>
     /// A reference to the verse text ui container
     /// </summary>
     Text verseText;
@@ -71,11 +76,20 @@ public class Scripture : MonoBehaviour
 
 
     /// <summary>
-    /// Initialization
+    /// Stores the original unultured verse
+    /// If the original verse has already been store then it updates the UI's text instead
+    /// Breaks the verse into an array to find the indexes where a "blank" is located and stores them
+    /// to later find available indixes on where to set a new word
     /// </summary>
-    void Start()
+    public void Init()
     {
-        this.verse = this.VerseText.text.Split(' ');
+        if(string.IsNullOrEmpty(this.originalVerse)) {
+            this.originalVerse = this.VerseText.text;
+        } else {
+            this.VerseText.text = this.originalVerse;
+        }
+
+        this.verse = this.originalVerse.Split(' ');
 
         for(int i = 0; i < this.verse.GetLength(0); i++) {
             string word = this.verse[i];
