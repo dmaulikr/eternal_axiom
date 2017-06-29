@@ -228,7 +228,7 @@ public class PlayerDungeon : MonoBehaviour, ICollideable
     } // GetMovementVector
 
 
-     /// <summary>
+    /// <summary>
     /// Moves/Rotates the rigid body based on player input
     /// </summary>
     void Move(Vector3 movementInput)
