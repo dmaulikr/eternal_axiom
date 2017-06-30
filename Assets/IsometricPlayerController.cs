@@ -78,6 +78,21 @@ public class IsometricPlayerController : MonoBehaviour
             return this.dpad;
         }
     }
+    
+    /// <summary>
+    /// A reference to the Dungeon Controller Class
+    /// </summary>
+    IsometricDungeonGenerator dungeonController;
+    IsometricDungeonGenerator DungeonController
+    {
+        get
+        {
+            if(this.dungeonController == null) {
+                this.dungeonController = FindObjectOfType<IsometricDungeonGenerator>();
+            }
+            return this.dungeonController;
+        }
+    }
 
     /// <summary>
     /// How close to the desired destination before considering it as "reached"
@@ -123,12 +138,16 @@ public class IsometricPlayerController : MonoBehaviour
         if(this.transform.position != this.desiredPosition) {
             return;
         }
+        
+        float h = 0f; // Horizontal
+        float v = 0f; // Vertical
 
-        float h = -Input.GetAxisRaw("Horizontal");
-        float v = Input.GetAxisRaw("Vertical");
-
-        // Give the virtual DPad priority
-        if(this.DPad != null) {
+        // Keyboard Input
+        if(Input.GetAxisRaw("Horizontal") != 0 || Input.GetAxisRaw("Vertical") != 0) {
+            h = -Input.GetAxisRaw("Horizontal");
+            v = Input.GetAxisRaw("Vertical");
+        // Virtual D-Pad Input
+        } else if(this.DPad != null) {
             h = -this.DPad.Input["Horizontal"];
             v = this.DPad.Input["Vertical"];
         } 
@@ -143,11 +162,16 @@ public class IsometricPlayerController : MonoBehaviour
         this.inputVector = new Vector3(v, 0f, h);
                 
         // New tile to move to
-        this.desiredPosition = new Vector3(
+        Vector3 newPosition = new Vector3(
             Mathf.Floor(this.transform.position.x) + v * 2,
             0f,
             Mathf.Floor(this.transform.position.z) + h * 2
         );
+
+        if(this.DungeonController.IsPositionWalkable(newPosition)) {
+            this.desiredPosition = newPosition;
+        }
+
     }
 
      /// <summary>

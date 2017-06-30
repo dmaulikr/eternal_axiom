@@ -55,11 +55,33 @@ public class IsometricDungeonGenerator : MonoBehaviour
         new int[] {0,0,2,2,2,2,2,2,2,2,2,2,2,2,0},
     };
 
+    /// <summary>
+    /// Contains the location of walkable tiles
+    /// </summary>
+    [SerializeField]
+    List<Vector3> floorTiles = new List<Vector3>();
+
+    /// <summary>
+    /// Creates the Dungeon and saves all available floor tiles
+    /// </summary>
     void Start()
     {
         this.CreateDungeon();
+        //foreach(GameObject floor in GameObject.FindGameObjectsWithTag("Floor")) {
+        //    this.floorTiles.Add(floor.transform.position);
+        //}
     }
     
+    /// <summary>
+    /// Returns TRUE when there's a floor tile at the given position
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    public bool IsPositionWalkable(Vector3 position)
+    {
+        return this.floorTiles.Contains(position);
+    }
+
     /// <summary>
     /// /// <summary>
     /// Instantiates the objects represented in the tileMap based on their 
@@ -100,6 +122,8 @@ public class IsometricDungeonGenerator : MonoBehaviour
         }
 
         children.ForEach(child => DestroyImmediate(child));
+
+        this.floorTiles.Clear();
     }
 
     /// <summary>
@@ -114,12 +138,12 @@ public class IsometricDungeonGenerator : MonoBehaviour
         GameObject go = Instantiate(prefab, this.transform, false);
         go.transform.position = destination;
         go.name = tileName;
-        // Creates a floor tile beneath this tile if it requires it
+
+        // Additional changes based on the type
         switch(type) {
-            // Wall
-            case 2:
-                tileName += "_Wall_Support";
-                this.CreateTileAt(1, tileName, destination);
+            case 1:
+                go.tag = "Floor";
+                this.floorTiles.Add(destination);
                 break;
         }
     }
