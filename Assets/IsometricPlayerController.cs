@@ -117,7 +117,8 @@ public class IsometricPlayerController : MonoBehaviour
     /// </summary>
     void Update()
     {
-        this.SavePlayerInput();        
+        this.SavePlayerInput();
+        this.DungeonController.ShowHideWalls(this.desiredPosition);
     }
 
     /// <summary>
@@ -163,15 +164,14 @@ public class IsometricPlayerController : MonoBehaviour
                 
         // New tile to move to
         Vector3 newPosition = new Vector3(
-            Mathf.Floor(this.transform.position.x) + v * 2,
+            Mathf.Floor(this.transform.position.x) + v,
             0f,
-            Mathf.Floor(this.transform.position.z) + h * 2
+            Mathf.Floor(this.transform.position.z) + h
         );
 
         if(this.DungeonController.IsPositionWalkable(newPosition)) {
             this.desiredPosition = newPosition;
         }
-
     }
 
      /// <summary>
