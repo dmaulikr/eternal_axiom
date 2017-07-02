@@ -29,7 +29,8 @@ public class IsometricDungeonGenerator : MonoBehaviour
     /// <summary>
     /// Holds all the walls that are currently hidden
     /// </summary>
-    Dictionary<Vector3, WallTile> hiddenWalls = new Dictionary<Vector3, WallTile>();
+    [SerializeField]
+    List<WallTile> hiddenWalls = new List<WallTile>();
 
     /// <summary>
     /// Contains the current map generated
@@ -59,6 +60,12 @@ public class IsometricDungeonGenerator : MonoBehaviour
         new int[] {0,0,0,0,0,2,1,1,1,2,0,0,0,0,0},
         new int[] {0,0,0,0,0,2,2,2,2,2,0,0,0,0,0},
     };
+
+    /// <summary>
+    /// How many tiles ahead/behind can the player see
+    /// </summary>
+    [SerializeField]
+    int tileViewRange = 2;
 
     /// <summary>
     /// Creates the Dungeon and saves all available floor tiles
@@ -151,51 +158,133 @@ public class IsometricDungeonGenerator : MonoBehaviour
     /// </summary>
     public void ShowHideWalls(Vector3 playerPosition)
     {
-        List<Vector3> positions = new List<Vector3> {
-            // Two tiles behind
-            new Vector3(playerPosition.x - 1, 0f, playerPosition.z + 2),
-            // One tile behind
-            new Vector3(playerPosition.x - 1, 0f, playerPosition.z + 1),
-            // Tile next to the player
-            new Vector3(playerPosition.x - 1, 0f, playerPosition.z),
-            // One tile ahead
-            new Vector3(playerPosition.x - 1, 0f, playerPosition.z - 1),
-            // Two tiles ahead
-            new Vector3(playerPosition.x - 1, 0f, playerPosition.z - 2)
-        };
+        // Creates a list of floor tiles accessible to the player that may be hidden by a wall
+        List<Vector3> floorPositions = this.GetFloorTilesInViewRange(playerPosition);
 
-        // Show walls that are no longer blocking the view
-        List<Vector3> keys = new List<Vector3>();
-        foreach(KeyValuePair<Vector3, WallTile> entry in this.hiddenWalls) {
-            if( ! positions.Contains(entry.Key) ) {
-                entry.Value.HideWall = false;
-                keys.Add(entry.Key);
+        // Get a list of the walls obstructing the floor tiles
+        List<WallTile> wallTiles = this.GetWallsObstructingFloorTiles(floorPositions);
+
+        // Reveal walls that are no longer obstructing the views
+        // and save their key so that we can remove them from the list
+        List<WallTile> wallTilesToRemove = new List<WallTile>();
+
+        foreach(WallTile wallTile in this.hiddenWalls) {
+            if( ! wallTiles.Contains(wallTile) ) {
+                wallTile.HideWall = false;
+                wallTilesToRemove.Add(wallTile);
             }
         }
 
-        // Remove the wall that is no longer hidden
-        foreach(Vector3 key in keys) {
-            this.hiddenWalls.Remove(key);
+        // Remove the ones no longer obstructing the view
+        foreach(WallTile wall in wallTilesToRemove) {
+            this.hiddenWalls.Remove(wall);
         }
 
-        // Hide the walls blocking the view
-        foreach(Vector3 position in positions) {
-            int z = (int)position.z;
-            int x = (int)position.x;
+        // Hide walls obstructing the view
+        foreach(WallTile wallTile in wallTiles) {
+            // D.R.Y.
+            if(this.hiddenWalls.Contains(wallTile)) {
+                continue;
+            }
 
-            bool isWall = this.tileMap[z][x] == 2;
-            bool notInList = !this.hiddenWalls.ContainsKey(position);
+            wallTile.HideWall = true;
+            this.hiddenWalls.Add(wallTile);
+        }
+    }
 
-            if(isWall && notInList) {
-                string wallName = string.Format("Tile_{0}_{1}", z, x);
-                GameObject wallGO = GameObject.Find(wallName);
+    /// <summary>
+    /// Returns a list of tile positions that are in direct line of the player's
+    /// view range including tiles behind them. Any tile obstructed by a wall is 
+    /// not included in the return list. 
+    /// The list includes both the X, and Z view ranges
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns>List of Vector3 floor tile positions</returns>
+    List<Vector3> GetFloorTilesInViewRange(Vector3 position)
+    {
+        // Always include the player player's current position
+        List<Vector3> floorTilesPosition = new List<Vector3>{ position };
+        List<Vector3> xTilePositions = new List<Vector3>();
+        List<Vector3> zTilePositions = new List<Vector3>();
+               
+        // We look behind and infront of the player in both x and z axis
+        // to get all tiles potentially available to the player
+        for(int i = -this.tileViewRange; i <= this.tileViewRange; i++) {
+            // How much to increment current tile to get the "next" tile
+            int increment = (i == this.tileViewRange) ? 0 : 1;
+            
+            float x = position.x + i;
+            float z = position.z + i;
+            
+            // Skip the tile the player is currently one
+            if(i == 0) {
+                continue;
+            }
+            
+            // X-Axis Tiles
+            if(x > -1 && x < this.tileMap[0].Length) {
+                int currentTile = this.tileMap[(int)position.z][(int)x];
+                int nextTile = currentTile;
 
-                if(wallName != null) {
-                    WallTile wall = wallGO.GetComponent<WallTile>();
-                    wall.HideWall = true;
-                    this.hiddenWalls.Add(position, wall);
+                // Prevents the next tile to be beyond the tile map size
+                if(x + increment < this.tileMap[0].Length) {
+                    nextTile = this.tileMap[(int)position.z][(int)x + increment];
                 }
-            } // if
-        } // foreach
+
+                // If the current or next tile is a wall, don't add it
+                if(currentTile != 2 && nextTile != 2) {
+                    xTilePositions.Add( new Vector3(x, 0f, position.z) );
+                }
+            }
+
+            // Z-Axis Tiles
+            if(z > -1 && z < this.tileMap.Length) {
+                int currentTile = this.tileMap[(int)z][(int)position.x];
+                int nextTile = currentTile;
+
+                // Prevents the next tile to be beyond the tile map size
+                if(z + increment < this.tileMap.Length) {
+                    nextTile = this.tileMap[(int)z + increment][(int)position.x];
+                }
+
+                // If the current or next tile is a wall, don't add it
+                if(currentTile != 2 && nextTile != 2) {
+                    zTilePositions.Add( new Vector3(position.x, 0f, z) );
+                }
+            }
+        }
+
+        floorTilesPosition.AddRange(xTilePositions);
+        floorTilesPosition.AddRange(zTilePositions);
+        return floorTilesPosition;
+    }
+    
+    /// <summary>
+    /// Casts a ray from the camera down to the each floor tile
+    /// returning any wall that obstructs a floor tile
+    /// </summary>
+    /// <param name="floorPositions"></param>
+    /// <returns></returns>
+    List<WallTile> GetWallsObstructingFloorTiles(List<Vector3> floorPositions)
+    {
+        List<WallTile> wallTiles = new List<WallTile>();
+
+        foreach(Vector3 floorPosition in floorPositions) {
+            Vector3 origin = Camera.main.transform.position;
+            Vector3 direction = floorPosition - origin;
+            float maxDistance = Mathf.Infinity;
+            RaycastHit hitInfo;
+            int layerMask = LayerMask.NameToLayer("Wall");
+
+            if( Physics.Raycast(origin, direction, out hitInfo, maxDistance, layerMask) ){
+
+                WallTile wallTile = hitInfo.collider.GetComponentInParent<WallTile>();
+                if(wallTile != null) {   
+                    wallTiles.Add(wallTile);
+                }
+            }
+        }
+
+        return wallTiles;
     }
 }
