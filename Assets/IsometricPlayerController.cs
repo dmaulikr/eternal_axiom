@@ -118,7 +118,7 @@ public class IsometricPlayerController : MonoBehaviour
     void Update()
     {
         this.SavePlayerInput();
-        this.DungeonController.ShowHideWalls(this.desiredPosition);
+        // this.DungeonController.ShowHideWalls(this.desiredPosition);
     }
 
     /// <summary>

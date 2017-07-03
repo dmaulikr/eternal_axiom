@@ -33,4 +33,28 @@ public class WallTile : MonoBehaviour
             this.AnimatorController.SetBool("FadeOut", value);
         }
     }
+    
+    /// <summary>
+    /// While the player is close enough to this wall and this wall
+    /// is obstructing the player's view, we will hide the wall
+    /// </summary>
+    /// <param name="other"></param>
+    void OnTriggerStay(Collider other)
+    {
+        if(other.tag == "Player") {
+            this.HideWall = true;
+        }
+    }
+
+    /// <summary>
+    /// Hides the player since the player is far enough that this wall 
+    /// is no longer obstructing it
+    /// </summary>
+    /// <param name="other"></param>
+    void OnTriggerExit(Collider other)
+    {
+        if(other.tag == "Player") {
+            this.HideWall = false;
+        }
+    }
 }

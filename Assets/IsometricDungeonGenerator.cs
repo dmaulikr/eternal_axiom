@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using System.Linq;
 
 /// <summary>
 /// Handles the creation of an isometric dungeon 
@@ -31,6 +32,9 @@ public class IsometricDungeonGenerator : MonoBehaviour
     /// </summary>
     [SerializeField]
     List<WallTile> hiddenWalls = new List<WallTile>();
+
+    [SerializeField]
+    List<GameObject> floorTiles = new List<GameObject>();
 
     /// <summary>
     /// Contains the current map generated
@@ -74,7 +78,7 @@ public class IsometricDungeonGenerator : MonoBehaviour
     {
         this.CreateDungeon();
     }
-    
+
     /// <summary>
     /// Returns TRUE when there's a floor tile at the given position
     /// </summary>
@@ -116,7 +120,7 @@ public class IsometricDungeonGenerator : MonoBehaviour
                                                   0f,
                                                   z * this.tileScaling.z);
 
-                string tileName = string.Format("Tile_{0}_{1}", z, x);
+                string tileName = string.Format("Tile_{0}_{1}", x, z);
                 this.CreateTileAt(this.tileMap[z][x], tileName, desitnation);
             } // for x
         } // for z
@@ -151,6 +155,44 @@ public class IsometricDungeonGenerator : MonoBehaviour
         go.transform.position = destination;
         go.name = tileName;
     }
+
+    /// <summary>
+    /// Returns the tile type located at the given position if a tile
+    /// exists at that position
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    int GetTileTypeAtPosition(Vector3 position)
+    {
+        // -1 No tile
+        int tileType = -1; 
+
+        int x = (int)position.x;
+        int z = (int)position.z;
+
+        bool xInBound = x > -1 && x < this.tileMap[0].Length;
+        bool zInBound = z > -1 && z < this.tileMap.Length;
+
+        if(xInBound && zInBound) {
+            tileType = this.tileMap[z][x];
+        }
+
+        return tileType;
+    }
+
+    /// <summary>
+    /// Returns the tile GameObject for the given position if one exists
+    /// </summary>
+    /// <param name="position"></param>
+    /// <returns></returns>
+    GameObject GetTileObjectAtLocation(Vector3 position)
+    {
+        int x = (int)position.x;
+        int z = (int)position.z;
+
+        string tileName = string.Format("Tile_{0}_{1}", x, z);
+        return GameObject.Find(tileName);
+    }
     
     /// <summary>
     /// Hides walls blocking the player's view
@@ -161,8 +203,16 @@ public class IsometricDungeonGenerator : MonoBehaviour
         // Creates a list of floor tiles accessible to the player that may be hidden by a wall
         List<Vector3> floorPositions = this.GetFloorTilesInViewRange(playerPosition);
 
+        this.floorTiles.Clear();
+        foreach(Vector3 position in floorPositions) {
+            GameObject go = this.GetTileObjectAtLocation(position);
+            if(go != null) {
+                this.floorTiles.Add(go);
+            }
+        }
+        
         // Get a list of the walls obstructing the floor tiles
-        List<WallTile> wallTiles = this.GetWallsObstructingFloorTiles(floorPositions);
+        List<WallTile> wallTiles = this.GetWallsObstructingFloorTiles(floorPositions, playerPosition);
 
         // Reveal walls that are no longer obstructing the views
         // and save their key so that we can remove them from the list
@@ -216,11 +266,6 @@ public class IsometricDungeonGenerator : MonoBehaviour
             float x = position.x + i;
             float z = position.z + i;
             
-            // Skip the tile the player is currently one
-            if(i == 0) {
-                continue;
-            }
-            
             // X-Axis Tiles
             if(x > -1 && x < this.tileMap[0].Length) {
                 int currentTile = this.tileMap[(int)position.z][(int)x];
@@ -230,9 +275,9 @@ public class IsometricDungeonGenerator : MonoBehaviour
                 if(x + increment < this.tileMap[0].Length) {
                     nextTile = this.tileMap[(int)position.z][(int)x + increment];
                 }
-
+                
                 // If the current or next tile is a wall, don't add it
-                if(currentTile != 2 && nextTile != 2) {
+                if (currentTile == 1 && (currentTile != 2 && nextTile != 2)) {
                     xTilePositions.Add( new Vector3(x, 0f, position.z) );
                 }
             }
@@ -248,7 +293,7 @@ public class IsometricDungeonGenerator : MonoBehaviour
                 }
 
                 // If the current or next tile is a wall, don't add it
-                if(currentTile != 2 && nextTile != 2) {
+                if(currentTile == 1 && (currentTile != 2 && nextTile != 2)) {
                     zTilePositions.Add( new Vector3(position.x, 0f, z) );
                 }
             }
@@ -256,7 +301,7 @@ public class IsometricDungeonGenerator : MonoBehaviour
 
         floorTilesPosition.AddRange(xTilePositions);
         floorTilesPosition.AddRange(zTilePositions);
-        return floorTilesPosition;
+        return floorTilesPosition.Distinct().ToList();
     }
     
     /// <summary>
@@ -265,21 +310,23 @@ public class IsometricDungeonGenerator : MonoBehaviour
     /// </summary>
     /// <param name="floorPositions"></param>
     /// <returns></returns>
-    List<WallTile> GetWallsObstructingFloorTiles(List<Vector3> floorPositions)
+    List<WallTile> GetWallsObstructingFloorTiles(List<Vector3> floorPositions, Vector3 playerPosition)
     {
         List<WallTile> wallTiles = new List<WallTile>();
 
         foreach(Vector3 floorPosition in floorPositions) {
-            Vector3 origin = Camera.main.transform.position;
-            Vector3 direction = floorPosition - origin;
-            float maxDistance = Mathf.Infinity;
-            RaycastHit hitInfo;
-            int layerMask = LayerMask.NameToLayer("Wall");
+            Vector3 wallPosition = new Vector3();
 
-            if( Physics.Raycast(origin, direction, out hitInfo, maxDistance, layerMask) ){
+            if(floorPosition.x == playerPosition.x) {
+                wallPosition = new Vector3(floorPosition.x -1, floorPosition.y, floorPosition.z);
+            } else {
+                wallPosition = new Vector3(floorPosition.x, floorPosition.y, floorPosition.z -1);
+            }
 
-                WallTile wallTile = hitInfo.collider.GetComponentInParent<WallTile>();
-                if(wallTile != null) {   
+            GameObject wallGO = this.GetTileObjectAtLocation(wallPosition);
+            if(wallGO != null) {
+                WallTile wallTile = wallGO.GetComponentInParent<WallTile>();
+                if(wallTile != null) {
                     wallTiles.Add(wallTile);
                 }
             }
