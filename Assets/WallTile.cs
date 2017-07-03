@@ -8,7 +8,7 @@ using UnityEngine;
 public class WallTile : MonoBehaviour
 {
     /// <summary>
-    /// Holds a reference to the Animator Component
+    /// Holds a reference to the AnimatorController Component
     /// </summary>
     Animator animator;
     Animator AnimatorController

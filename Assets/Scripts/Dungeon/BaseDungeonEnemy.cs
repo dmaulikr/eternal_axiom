@@ -74,7 +74,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
             }
             return this.animator;
         }
-    } // Animator
+    } // AnimatorController
 
     /// <summary>
     /// References the navigation mesh agent
@@ -434,7 +434,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     }
 
     /// <summary>
-    /// Triggers the Animator's trigger parameter for the given state as long
+    /// Triggers the AnimatorController's trigger parameter for the given state as long
     /// as the animation being played is not already the desired one to avoid 
     /// setting the trigger multiple times
     /// </summary>

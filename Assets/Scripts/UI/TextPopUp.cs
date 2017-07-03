@@ -8,7 +8,7 @@ using UnityEngine.UI;
 public class TextPopUp : MonoBehaviour 
 {
     /// <summary>
-    /// References the Animator component of the child Text component
+    /// References the AnimatorController component of the child Text component
     /// </summary>
     [SerializeField]
     Animator childAnimator;

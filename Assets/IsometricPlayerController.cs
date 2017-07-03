@@ -12,12 +12,20 @@ public class IsometricPlayerController : MonoBehaviour
     /// <summary>
     /// Movement speed
     /// </summary>
-    public float moveSpeed = 3f;
+    [SerializeField]
+    float moveSpeed = 3f;
 
     /// <summary>
     /// Turning speed
     /// </summary>
-    public float turnSpeed = 20f;
+    [SerializeField]
+    float turnSpeed = 20f;
+
+    /// <summary>
+    /// How to slow down the animation transition
+    /// </summary>
+    [SerializeField]
+    float animationDamp = .1f;
 
     /// <summary>
     /// The physics force to apply when moving the rigid body
@@ -52,8 +60,11 @@ public class IsometricPlayerController : MonoBehaviour
     } // Rigidbody
     new Rigidbody rigidbody;
 
+    /// <summary>
+    /// References the animator component
+    /// </summary>
     Animator animator;
-    Animator Animator
+    Animator AnimatorController
     {
         get
         {
@@ -98,7 +109,14 @@ public class IsometricPlayerController : MonoBehaviour
     /// How close to the desired destination before considering it as "reached"
     /// </summary>
     [SerializeField]
-    float distancePadding = 0.3f;
+    float distanceToCenter = 0.1f;
+
+    /// <summary>
+    /// How close to center of the tile to allow the player to change the desired
+    /// destination before actually "stopping"
+    /// </summary>
+    [SerializeField]
+    float distanceToContinueMoving = 0.3f;
 
     /// <summary>
     /// Initialize
@@ -135,11 +153,6 @@ public class IsometricPlayerController : MonoBehaviour
     /// </summary>
     void SavePlayerInput()
     {
-        // Player is still moving, ignore input
-        if(this.transform.position != this.desiredPosition) {
-            return;
-        }
-        
         float h = 0f; // Horizontal
         float v = 0f; // Vertical
 
@@ -158,23 +171,27 @@ public class IsometricPlayerController : MonoBehaviour
             v = 0f;
         }
 
-        // Saves the direction the player input
-        // Due to the perspective of the camera, the horizontal axis is inverted
-        this.inputVector = new Vector3(v, 0f, h);
+        // Player is still moving and not close enough to consider a new direciton
+        float distance = Vector3.Distance(this.desiredPosition, this.transform.position);
+        if(distance <= this.distanceToContinueMoving && (h != 0 || v != 0)) {
+            // Saves the direction the player input
+            // Due to the perspective of the camera, the horizontal axis is inverted
+            this.inputVector = new Vector3(v, 0f, h);
                 
-        // New tile to move to
-        Vector3 newPosition = new Vector3(
-            Mathf.Floor(this.transform.position.x) + v,
-            0f,
-            Mathf.Floor(this.transform.position.z) + h
-        );
+            // New tile to move to
+            Vector3 newPosition = new Vector3(
+                Mathf.Floor(this.transform.position.x) + v,
+                0f,
+                Mathf.Floor(this.transform.position.z) + h
+            );
 
-        if(this.DungeonController.IsPositionWalkable(newPosition)) {
-            this.desiredPosition = newPosition;
+            if(this.DungeonController.IsPositionWalkable(newPosition)) {
+                this.desiredPosition = newPosition;
+            }          
         }
     }
 
-     /// <summary>
+    /// <summary>
     /// Moves/Rotates the rigid body based on player input
     /// </summary>
     void Move(Vector3 movementInput)
@@ -182,14 +199,14 @@ public class IsometricPlayerController : MonoBehaviour
         float distance = Vector3.Distance(this.desiredPosition, this.transform.position);
 
         // Made it
-        if(distance <= this.distancePadding) {
+        if(distance <= this.distanceToCenter) {
             this.Rigidbody.velocity = Vector3.zero;
             this.transform.position = this.desiredPosition;
-            this.Animator.SetFloat("Speed", 0f);
+            this.AnimatorController.SetFloat("MovingSpeed", 0f, this.animationDamp, Time.fixedDeltaTime);
             return;
         }
 
-        this.Animator.SetFloat("Speed", 1f);
+        this.AnimatorController.SetFloat("MovingSpeed", 1f, this.animationDamp, Time.fixedDeltaTime);
         Vector3 newPosition = Vector3.Lerp(this.transform.position, this.desiredPosition, this.moveSpeed * Time.fixedDeltaTime);
         this.Rigidbody.MovePosition(newPosition);
     } // Move

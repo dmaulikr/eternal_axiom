@@ -67,7 +67,7 @@ public class PlayerDungeon : MonoBehaviour, ICollideable
             }
             return this.animator;
         }
-    } // Animator
+    } // AnimatorController
 
     /// <summary>
     /// Returns the transform of the main camera
