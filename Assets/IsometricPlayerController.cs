@@ -31,7 +31,7 @@ public class IsometricPlayerController : MonoBehaviour
     /// The physics force to apply when moving the rigid body
     /// </summary>
     [SerializeField]
-    private ForceMode forceMode = ForceMode.VelocityChange;
+    ForceMode forceMode = ForceMode.VelocityChange;
 
     /// <summary>
     /// Stores the direction the player wants to move
@@ -119,6 +119,25 @@ public class IsometricPlayerController : MonoBehaviour
     float distanceToContinueMoving = 0.3f;
 
     /// <summary>
+    /// Keeps track of the direction in degrees that the player is facing
+    /// </summary>
+    float directionInDegrees;
+
+    /// <summary>
+    /// True when this object is moving to a new tile
+    /// </summary>
+    bool isMoving = false;
+
+    bool isSpotted = false;
+    public bool IsSpotted
+    {
+        set
+        {
+            this.isSpotted = value;
+        }
+    }
+
+    /// <summary>
     /// Initialize
     /// </summary>
     void Start()
@@ -135,8 +154,9 @@ public class IsometricPlayerController : MonoBehaviour
     /// </summary>
     void Update()
     {
-        this.SavePlayerInput();
-        // this.DungeonController.ShowHideWalls(this.desiredPosition);
+        if(!this.isSpotted) {
+            this.SavePlayerInput();
+        }
     }
 
     /// <summary>
@@ -145,7 +165,7 @@ public class IsometricPlayerController : MonoBehaviour
     void FixedUpdate()
     {
         this.Rotate(this.inputVector);
-        this.Move(this.inputVector);
+        this.Move(this.desiredPosition);
     }
 
     /// <summary>
@@ -155,59 +175,120 @@ public class IsometricPlayerController : MonoBehaviour
     {
         float h = 0f; // Horizontal
         float v = 0f; // Vertical
+        float newDirection  = this.directionInDegrees;
+        Vector3 newPosition = this.desiredPosition;
 
         // Keyboard Input
         if(Input.GetAxisRaw("Horizontal") != 0 || Input.GetAxisRaw("Vertical") != 0) {
-            h = -Input.GetAxisRaw("Horizontal");
+            h = Input.GetAxisRaw("Horizontal");
             v = Input.GetAxisRaw("Vertical");
+
         // Virtual D-Pad Input
         } else if(this.DPad != null) {
-            h = -this.DPad.Input["Horizontal"];
+            h = this.DPad.Input["Horizontal"];
             v = this.DPad.Input["Vertical"];
-        } 
+        }
 
+        // True when the either input is not 0
+        bool inputGiven = (h != 0 || v != 0);
+        
         // Horizontal takes prescedence
         if(h != 0 && v != 0) {
             v = 0f;
         }
 
-        // Player is still moving and not close enough to consider a new direciton
-        float distance = Vector3.Distance(this.desiredPosition, this.transform.position);
-        if(distance <= this.distanceToContinueMoving && (h != 0 || v != 0)) {
-            // Saves the direction the player input
-            // Due to the perspective of the camera, the horizontal axis is inverted
-            this.inputVector = new Vector3(v, 0f, h);
-                
-            // New tile to move to
-            Vector3 newPosition = new Vector3(
-                Mathf.Floor(this.transform.position.x) + v,
-                0f,
-                Mathf.Floor(this.transform.position.z) + h
-            );
+        //// If the player was moving horizontally before 
+        //// and decided to move vertically while still holding the horizontal buttons down
+        //// then we will respect the new direction, and vice-versa
+        
+        //// Horizontal Movement
+        //if(this.directionInDegrees == 90f || this.directionInDegrees == 270f) {
+        //    if(v != 0 ) {
+        //        h = 0;
+        //    }
+        //}
 
-            if(this.DungeonController.IsPositionWalkable(newPosition)) {
-                this.desiredPosition = newPosition;
-            }          
+        //// Vertical Movement
+        //if(this.directionInDegrees == 0f || this.directionInDegrees == 180f) {
+        //    if(h != 0 ) {
+        //        v = 0;
+        //    }
+        //}
+
+        // Get the new direction the player is moving
+        if(h < 0) {
+            newDirection = 270f;
+        } else if (h > 0) {
+            newDirection = 90f;
         }
-    }
+
+        if(v < 0) {
+            newDirection = 180f;
+        } else if (v > 0) {
+            newDirection = 0f;
+        }
+
+        // Distance lets us know of the player is close enough to the destination to:
+        // - Allow continue moving in the direction
+        // - or to be considered as "arrived" and allow a change in direction
+        float distance = Vector3.Distance(this.desiredPosition, this.transform.position);
+
+        // While the player is moving the only input they are allowed to do is
+        // to continue to move in the same direction
+        if(this.isMoving && inputGiven && newDirection == this.directionInDegrees) {
+            if(distance <= this.distanceToContinueMoving) {
+                newPosition = new Vector3(
+                    Mathf.Floor(this.transform.position.x) + h,
+                    0f,
+                    Mathf.Floor(this.transform.position.z) + v
+                );
+                this.inputVector = new Vector3(h, 0f, v);
+            }
+        }
+
+        // If the player is not moving then they can move in the given direction
+        // only after they are facing said direction
+        if(!this.isMoving) {            
+            // Update rotation
+            if(newDirection != this.directionInDegrees) {
+                this.directionInDegrees = newDirection;
+                this.inputVector = new Vector3(h, 0f, v);
+            // Update destination
+            } else {
+                newPosition = new Vector3(
+                    Mathf.Floor(this.transform.position.x) + h,
+                    0f,
+                    Mathf.Floor(this.transform.position.z) + v
+                );
+                this.inputVector = new Vector3(h, 0f, v);
+            }
+        } // ! this.isMoving
+
+        // Checks if the new position is available
+        if(this.DungeonController.IsPositionWalkable(newPosition)) {
+            this.desiredPosition = newPosition;
+        }
+    } // if
 
     /// <summary>
     /// Moves/Rotates the rigid body based on player input
     /// </summary>
-    void Move(Vector3 movementInput)
+    void Move(Vector3 desiredPosition)
     {
-        float distance = Vector3.Distance(this.desiredPosition, this.transform.position);
+        float distance = Vector3.Distance(desiredPosition, this.transform.position);
 
         // Made it
         if(distance <= this.distanceToCenter) {
+            this.isMoving = false;
             this.Rigidbody.velocity = Vector3.zero;
-            this.transform.position = this.desiredPosition;
+            this.transform.position = desiredPosition;
             this.AnimatorController.SetFloat("MovingSpeed", 0f, this.animationDamp, Time.fixedDeltaTime);
             return;
         }
 
+        this.isMoving = true;
         this.AnimatorController.SetFloat("MovingSpeed", 1f, this.animationDamp, Time.fixedDeltaTime);
-        Vector3 newPosition = Vector3.Lerp(this.transform.position, this.desiredPosition, this.moveSpeed * Time.fixedDeltaTime);
+        Vector3 newPosition = Vector3.Lerp(this.transform.position, desiredPosition, this.moveSpeed * Time.fixedDeltaTime);
         this.Rigidbody.MovePosition(newPosition);
     } // Move
 
@@ -220,13 +301,13 @@ public class IsometricPlayerController : MonoBehaviour
     /// <param name="vertical"></param>
     void Rotate(Vector3 MovementVector)
     {
-        if(this.inputVector == Vector3.zero) {
+        // We get an error if this is zero
+        if(MovementVector == Vector3.zero) {
             return;
         }
 
+        // Calculate and smooth rotate to target
         Quaternion targetRotation = Quaternion.LookRotation(MovementVector, Vector3.up);
-
-        // Calculate how much to rotate to get to face the targetDirection
         Quaternion newRotation = Quaternion.Lerp(this.Rigidbody.rotation, 
                                                  targetRotation, 
                                                  this.turnSpeed * Time.fixedDeltaTime);
