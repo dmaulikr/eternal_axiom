@@ -72,6 +72,19 @@ public class IsometricDungeonGenerator : MonoBehaviour
     int tileViewRange = 2;
 
     /// <summary>
+    /// A reference to the canvas manager
+    /// </summary>
+    CanvasManager canvasManager;
+
+    /// <summary>
+    /// Init
+    /// </summary>
+    void Awake()
+    {
+        this.canvasManager = FindObjectOfType<CanvasManager>();
+    }
+
+    /// <summary>
     /// Creates the Dungeon and saves all available floor tiles
     /// </summary>
     void Start()
@@ -333,5 +346,13 @@ public class IsometricDungeonGenerator : MonoBehaviour
         }
 
         return wallTiles;
+    }
+
+    /// <summary>
+    /// Trigger the start of a battle
+    /// </summary>
+    public void BattleEncounter()
+    {
+        this.canvasManager.BattleEncounter();
     }
 }

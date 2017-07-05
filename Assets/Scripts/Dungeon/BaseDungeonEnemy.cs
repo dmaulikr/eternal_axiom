@@ -63,7 +63,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // Player
 
     /// <summary>
-    /// A reference to the animator controller
+    /// A reference to the AnimatorController controller
     /// </summary>
     Animator animator;
     public Animator Animator
@@ -159,7 +159,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     } // EnemyState
 
     /// <summary>
-    /// A collection of animator parameters associated with a state
+    /// A collection of AnimatorController parameters associated with a state
     /// </summary>
     protected Dictionary<State, int> hashAnimatorParams = new Dictionary<State, int> {
         { State.Attack, Animator.StringToHash("Attack")},
@@ -168,7 +168,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     };
 
     /// <summary>
-    /// A hash reference to the speed animator parameter
+    /// A hash reference to the speed AnimatorController parameter
     /// </summary>
     protected readonly int hashSpeedParam = Animator.StringToHash("Speed");
 
@@ -201,7 +201,7 @@ public abstract class BaseDungeonEnemy : MonoBehaviour, ICollideable
     float navDestinationPad = 0.3f;
 
     /// <summary>
-    /// How slowly or quickly to update the animator speed float parameter
+    /// How slowly or quickly to update the AnimatorController speed float parameter
     /// This is used to slowly change the mecanim rather than snapping in to
     /// </summary>
     [SerializeField]

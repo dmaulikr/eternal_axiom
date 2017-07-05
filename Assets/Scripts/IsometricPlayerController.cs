@@ -61,7 +61,7 @@ public class IsometricPlayerController : MonoBehaviour
     new Rigidbody rigidbody;
 
     /// <summary>
-    /// References the animator component
+    /// References the AnimatorController component
     /// </summary>
     Animator animator;
     Animator AnimatorController
@@ -128,6 +128,10 @@ public class IsometricPlayerController : MonoBehaviour
     /// </summary>
     bool isMoving = false;
 
+    /// <summary>
+    /// Triggered when an enemy sees the player
+    /// Stops the avatar from responding to the player's input
+    /// </summary>
     bool isSpotted = false;
     public bool IsSpotted
     {
@@ -136,6 +140,28 @@ public class IsometricPlayerController : MonoBehaviour
             this.isSpotted = value;
         }
     }
+
+    /// <summary>
+    /// Player's current faith
+    /// </summary>
+    [SerializeField]
+    int faith = 100;
+    public int Faith
+    {
+        get
+        {
+            return this.faith;
+        }
+    }
+
+    public int MaxFaith
+    {
+        get
+        {
+            return 100;
+        }
+    }
+
 
     /// <summary>
     /// Initialize
@@ -337,4 +363,20 @@ public class IsometricPlayerController : MonoBehaviour
 
         return screenCoords;
     } // WorldToScreenCoordinates
+
+    /// <summary>
+    /// Triggered by the enemy's attack to display the Hurt animation
+    /// </summary>
+    public void TriggerHurt()
+    {
+        this.AnimatorController.SetTrigger("Hurt");
+    }
+
+    /// <summary>
+    /// Triggered when certain animations complete
+    /// </summary>
+    public void AnimationEnd()
+    {
+
+    }
 }

@@ -29,7 +29,7 @@ public class TextPopUp : MonoBehaviour
         this.childAnimator      = GetComponentInChildren<Animator>();
         this.childTextComponent = GetComponentInChildren<Text>();
 
-        // Grab the information for the current clip in the animator
+        // Grab the information for the current clip in the AnimatorController
         // 0 because we don't any other clips right now
         AnimatorClipInfo[] clipInfo = this.childAnimator.GetCurrentAnimatorClipInfo(0);
         float time = clipInfo[0].clip.length;

@@ -58,7 +58,7 @@ public class BattleUnit : MonoBehaviour
     internal BattleUnit target;
 
     /// <summary>
-    /// A refrence to the animator controller
+    /// A refrence to the AnimatorController controller
     /// </summary>
     Animator animator;
     Animator AnimatorController

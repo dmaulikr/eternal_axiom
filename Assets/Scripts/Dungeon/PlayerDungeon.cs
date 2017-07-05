@@ -57,7 +57,7 @@ public class PlayerDungeon : MonoBehaviour, ICollideable
 
     Animator animator;
     /// <summary>
-    /// Returns the animator component
+    /// Returns the AnimatorController component
     /// </summary>
     Animator Animator
     {
